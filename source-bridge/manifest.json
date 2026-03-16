@@ -1,0 +1,9 @@
+{
+	"id": "source-bridge",
+	"name": "Source Bridge",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Renders local filesystem paths as clickable links with expandable syntax-highlighted code previews.",
+	"author": "rob-9",
+	"isDesktopOnly": true
+}

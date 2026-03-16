@@ -1,0 +1,160 @@
+/* Source Bridge styles */
+
+.source-bridge-link {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  opacity: 0.9;
+}
+
+.source-bridge-link:hover {
+  opacity: 1;
+  text-decoration-style: solid;
+}
+
+.source-bridge-link .source-bridge-icon {
+  margin-right: 4px;
+  vertical-align: middle;
+  opacity: 0.6;
+}
+
+.source-bridge-link:hover .source-bridge-icon {
+  opacity: 1;
+}
+
+.source-bridge-container {
+  margin: 4px 0;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.source-bridge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: var(--background-secondary);
+  font-size: 0.8em;
+  font-family: var(--font-monospace);
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.source-bridge-header:hover {
+  background: var(--background-modifier-hover);
+}
+
+.source-bridge-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.source-bridge-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.source-bridge-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-bridge-lines {
+  color: var(--text-accent);
+  flex-shrink: 0;
+}
+
+.source-bridge-chevron {
+  transition: transform 0.15s ease;
+  opacity: 0.5;
+}
+
+.source-bridge-container.is-expanded .source-bridge-chevron {
+  transform: rotate(90deg);
+}
+
+.source-bridge-preview {
+  display: none;
+  max-height: 400px;
+  overflow: auto;
+  background: var(--code-background);
+}
+
+.source-bridge-container.is-expanded .source-bridge-preview {
+  display: block;
+}
+
+.source-bridge-preview pre {
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  border-radius: 0 !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+.source-bridge-preview code {
+  font-size: 0.85em !important;
+}
+
+.source-bridge-stale {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.source-bridge-stale.is-fresh {
+  background: var(--color-green);
+}
+
+.source-bridge-stale.is-stale {
+  background: var(--color-yellow);
+}
+
+.source-bridge-stale.is-missing {
+  background: var(--color-red);
+}
+
+.source-bridge-open-btn {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75em;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.source-bridge-open-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.source-bridge-error {
+  padding: 8px 12px;
+  color: var(--text-error);
+  font-size: 0.85em;
+  font-family: var(--font-monospace);
+}
+
+/* Editing mode (CM6) decorations */
+.cm-source-bridge-link {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.cm-source-bridge-link:hover {
+  text-decoration-style: solid;
+}
