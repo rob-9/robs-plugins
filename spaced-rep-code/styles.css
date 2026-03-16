@@ -1,0 +1,314 @@
+/* Spaced Rep Code styles */
+
+/* ─── Modal ────────────────────────────────────────────────────────────────── */
+
+.sr-code-modal .modal-content {
+  padding: 0;
+}
+
+.sr-code-modal {
+  width: 90vw;
+  max-width: 800px;
+  height: 80vh;
+  max-height: 700px;
+  display: flex;
+  flex-direction: column;
+  background: var(--background-primary);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.sr-code-modal .modal-close-button {
+  z-index: 10;
+}
+
+/* ─── Progress ─────────────────────────────────────────────────────────────── */
+
+.sr-code-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.sr-code-progress-bar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--background-modifier-border);
+  overflow: hidden;
+}
+
+.sr-code-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--interactive-accent);
+  transition: width 0.3s ease;
+}
+
+.sr-code-progress-text {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Card ─────────────────────────────────────────────────────────────────── */
+
+.sr-code-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+  gap: 16px;
+}
+
+.sr-code-question {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: var(--text-normal);
+  margin: 0;
+}
+
+.sr-code-file-info {
+  font-size: 0.8em;
+  color: var(--text-faint);
+  font-family: var(--font-monospace);
+}
+
+/* ─── Code Block ───────────────────────────────────────────────────────────── */
+
+.sr-code-block {
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.sr-code-block pre {
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+.sr-code-block code {
+  font-size: 0.9em !important;
+}
+
+/* ─── Cloze Inputs ─────────────────────────────────────────────────────────── */
+
+.sr-code-cloze-input {
+  font-family: var(--font-monospace);
+  font-size: inherit;
+  background: var(--background-modifier-border);
+  border: none;
+  border-bottom: 2px solid var(--interactive-accent);
+  color: var(--text-normal);
+  padding: 1px 4px;
+  border-radius: 2px;
+  outline: none;
+  min-width: 40px;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.sr-code-cloze-input:focus {
+  border-bottom-color: var(--interactive-accent-hover);
+  background: var(--background-primary-alt);
+}
+
+.sr-code-cloze-input.sr-correct {
+  border-bottom-color: var(--color-green);
+  background: rgba(0, 200, 83, 0.1);
+  color: var(--color-green);
+}
+
+.sr-code-cloze-input.sr-incorrect {
+  border-bottom-color: var(--color-red);
+  background: rgba(255, 82, 82, 0.1);
+  color: var(--color-red);
+}
+
+.sr-code-cloze-correct-answer {
+  font-family: var(--font-monospace);
+  font-size: inherit;
+  color: var(--color-green);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* ─── Answer Area ──────────────────────────────────────────────────────────── */
+
+.sr-code-answer {
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.sr-code-answer.sr-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sr-code-answer-label {
+  font-size: 0.75em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+.sr-code-answer-content {
+  font-family: var(--font-monospace);
+  font-size: 1em;
+  color: var(--text-normal);
+  white-space: pre-wrap;
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+
+.sr-code-actions {
+  padding: 16px 24px;
+  border-top: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+
+.sr-code-show-answer-row {
+  display: flex;
+  justify-content: center;
+}
+
+.sr-code-show-btn {
+  cursor: pointer;
+  padding: 10px 32px;
+  border-radius: 8px;
+  font-size: 0.95em;
+  font-weight: 500;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  transition: background 0.15s ease;
+}
+
+.sr-code-show-btn:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.sr-code-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.sr-code-buttons button {
+  cursor: pointer;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 0.9em;
+  font-weight: 500;
+  border: none;
+  color: #fff;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 80px;
+}
+
+.sr-code-buttons button:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.sr-code-buttons button:active {
+  transform: translateY(0);
+}
+
+.sr-code-btn-again {
+  background: #e53935;
+}
+
+.sr-code-btn-hard {
+  background: #f57c00;
+}
+
+.sr-code-btn-good {
+  background: #43a047;
+}
+
+.sr-code-btn-easy {
+  background: #1e88e5;
+}
+
+.sr-code-btn-interval {
+  font-size: 0.7em;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* ─── Summary ──────────────────────────────────────────────────────────────── */
+
+.sr-code-summary {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  gap: 20px;
+}
+
+.sr-code-summary-title {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.sr-code-summary-stats {
+  display: flex;
+  gap: 24px;
+  font-size: 0.95em;
+  color: var(--text-muted);
+}
+
+.sr-code-summary-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.sr-code-summary-stat-value {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: var(--text-normal);
+}
+
+.sr-code-summary-stat-label {
+  font-size: 0.8em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sr-code-summary-btn {
+  cursor: pointer;
+  padding: 10px 28px;
+  border-radius: 8px;
+  font-size: 0.95em;
+  font-weight: 500;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  margin-top: 12px;
+}
+
+.sr-code-summary-btn:hover {
+  background: var(--interactive-accent-hover);
+}

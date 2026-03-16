@@ -12,7 +12,7 @@ code-styler-default-language: cpp
 ---
 ```
 
-All inline code (`` `someCode` ``) in that file will be syntax highlighted as C++ automatically — no need to write `` `{cpp} someCode` `` each time.
+All inline code (`` `someCode` ``) in that file will be syntax highlighted as C++ automatically, no need to write `` `{cpp} someCode` `` each time.
 
 - Works in both editing (live preview) and reading mode
 - Explicit `{language}` on individual inline code still overrides the default

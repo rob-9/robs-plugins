@@ -1,0 +1,184 @@
+/* Complexity Sidebar styles */
+
+.complexity-panel {
+  padding: 12px;
+  font-size: 0.9em;
+  overflow-y: auto;
+}
+
+.complexity-header h4 {
+  margin: 0 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  font-weight: 600;
+}
+
+/* Empty state */
+.complexity-empty {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 24px 12px;
+  text-align: center;
+}
+
+/* Sections */
+.complexity-section {
+  margin-bottom: 16px;
+}
+
+.complexity-section h5 {
+  margin: 0 0 8px 0;
+  font-size: 0.8em;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Code block cards */
+.complexity-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.complexity-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.complexity-lang {
+  background: var(--background-modifier-hover);
+  color: var(--text-accent);
+  font-family: var(--font-monospace);
+  font-size: 0.75em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.complexity-title {
+  color: var(--text-normal);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.complexity-line-range {
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  font-size: 0.75em;
+  flex-shrink: 0;
+}
+
+/* Badge row */
+.complexity-badges {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.complexity-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.complexity-badge-label {
+  font-size: 0.75em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.complexity-badge {
+  font-family: var(--font-monospace);
+  font-size: 0.8em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Color-coded complexity badges */
+.complexity-green {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.complexity-yellow {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.complexity-orange {
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+  border: 1px solid rgba(255, 152, 0, 0.3);
+}
+
+.complexity-red {
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.complexity-gray {
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  border: 1px solid var(--background-modifier-border);
+}
+
+.complexity-unknown {
+  background: var(--background-modifier-hover);
+  color: var(--text-faint);
+  border: 1px dashed var(--background-modifier-border);
+  font-style: italic;
+}
+
+/* Constraint table */
+.complexity-constraint-table {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.complexity-constraint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.complexity-constraint-row + .complexity-constraint-row {
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.complexity-constraint {
+  font-family: var(--font-monospace);
+  font-size: 0.85em;
+  color: var(--text-normal);
+}
+
+/* Mismatch / warning styles */
+.complexity-warning {
+  background: rgba(244, 67, 54, 0.1);
+  border: 1px solid rgba(244, 67, 54, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  color: #f44336;
+  font-size: 0.8em;
+}
+
+.complexity-warning::before {
+  content: "\26A0 ";
+}

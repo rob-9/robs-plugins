@@ -1,0 +1,9 @@
+{
+	"id": "spaced-rep-code",
+	"name": "Spaced Rep Code",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Code-aware flashcard review with code cloze, output prediction, and complexity quiz card types.",
+	"author": "rob-9",
+	"isDesktopOnly": false
+}

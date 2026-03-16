@@ -1,0 +1,9 @@
+{
+	"id": "complexity-sidebar",
+	"name": "Complexity Sidebar",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Extracts Big-O complexity annotations from code blocks and displays them in a sidebar panel.",
+	"author": "rob-9",
+	"isDesktopOnly": false
+}

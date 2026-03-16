@@ -1,0 +1,9 @@
+{
+	"id": "dataview-lite",
+	"name": "Dataview Lite",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "A simple, beginner-friendly query language for Obsidian notes as a lightweight alternative to Dataview.",
+	"author": "rob-9",
+	"isDesktopOnly": false
+}
