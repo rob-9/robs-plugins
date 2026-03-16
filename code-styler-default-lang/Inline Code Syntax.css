@@ -1,0 +1,36 @@
+/* Allow code-styler syntax highlighting inside inline code */
+/* Fixes Maple theme's .cm-inline-code * { color: ... !important } override */
+
+/* Editing mode (Live Preview) - map CM5 classes to Obsidian code variables */
+.cm-inline-code .cm-keyword { color: var(--code-keyword) !important; }
+.cm-inline-code .cm-string:not(.cm-url) { color: var(--code-string) !important; }
+.cm-inline-code .cm-string-2 { color: var(--code-string) !important; }
+.cm-inline-code .cm-comment { color: var(--code-comment) !important; }
+.cm-inline-code .cm-number { color: var(--code-value) !important; }
+.cm-inline-code .cm-atom { color: var(--code-value) !important; }
+.cm-inline-code .cm-operator { color: var(--code-operator) !important; }
+.cm-inline-code .cm-meta { color: var(--code-important) !important; }
+.cm-inline-code .cm-tag { color: var(--code-tag) !important; }
+.cm-inline-code .cm-attribute { color: var(--code-property) !important; }
+.cm-inline-code .cm-property { color: var(--code-property) !important; }
+.cm-inline-code .cm-variable { color: var(--code-normal) !important; }
+.cm-inline-code .cm-variable-2 { color: var(--code-normal) !important; }
+.cm-inline-code .cm-variable-3 { color: var(--code-property) !important; }
+.cm-inline-code .cm-type { color: var(--code-keyword) !important; }
+.cm-inline-code .cm-def { color: var(--code-function) !important; }
+.cm-inline-code .cm-builtin { color: var(--code-function) !important; }
+.cm-inline-code .cm-qualifier { color: var(--code-keyword) !important; }
+.cm-inline-code .cm-bracket { color: var(--code-punctuation) !important; }
+
+/* Reading mode */
+code.code-styler-inline .token.keyword { color: var(--code-keyword) !important; }
+code.code-styler-inline .token.string { color: var(--code-string) !important; }
+code.code-styler-inline .token.comment { color: var(--code-comment) !important; }
+code.code-styler-inline .token.number { color: var(--code-value) !important; }
+code.code-styler-inline .token.operator { color: var(--code-operator) !important; }
+code.code-styler-inline .token.function { color: var(--code-function) !important; }
+code.code-styler-inline .token.class-name { color: var(--code-keyword) !important; }
+code.code-styler-inline .token.punctuation { color: var(--code-punctuation) !important; }
+code.code-styler-inline .token.builtin { color: var(--code-function) !important; }
+code.code-styler-inline .token.property { color: var(--code-property) !important; }
+code.code-styler-inline .token.tag { color: var(--code-tag) !important; }
