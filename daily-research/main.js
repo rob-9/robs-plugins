@@ -10,10 +10,10 @@ const DEFAULT_SETTINGS = {
   dailiesFolder: "-1 Dailies",
   interests:
     "agentic AI, multi-agent systems, MCP, RAG, LLMs, cybersecurity, distributed systems",
-  storyCount: 40,
+  storyCount: 30,
   runOnStartup: false,
   lastRunDate: "",
-  topicHistory: [], // last 30 topics for dedup
+  topicHistory: [],
 };
 
 const MAX_HISTORY = 30;
@@ -66,66 +66,6 @@ async function fetchHNStories(limit) {
 }
 
 // ---------------------------------------------------------------------------
-// Source: arXiv (recent CS.AI / CS.CL / CS.MA papers)
-// ---------------------------------------------------------------------------
-
-async function fetchArxivPapers(limit = 10) {
-  const query = "cat:cs.AI+OR+cat:cs.CL+OR+cat:cs.MA+OR+cat:cs.CR";
-  const url = `https://export.arxiv.org/api/query?search_query=${query}&sortBy=submittedDate&sortOrder=descending&max_results=${limit}`;
-
-  try {
-    const res = await requestUrl({ url });
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(res.text, "text/xml");
-    const entries = doc.querySelectorAll("entry");
-
-    return Array.from(entries).map((entry) => {
-      const title = entry.querySelector("title")?.textContent?.trim().replace(/\s+/g, " ") || "";
-      const link = entry.querySelector("id")?.textContent?.trim() || "";
-      const summary = entry.querySelector("summary")?.textContent?.trim().replace(/\s+/g, " ") || "";
-      return {
-        title,
-        url: link,
-        source: "arXiv",
-        score: 0,
-        snippet: summary.slice(0, 200),
-      };
-    });
-  } catch (err) {
-    console.error("Daily Research: arXiv fetch failed:", err);
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Source: Reddit (r/MachineLearning, r/LocalLLaMA)
-// ---------------------------------------------------------------------------
-
-async function fetchRedditPosts(subreddit, limit = 15) {
-  try {
-    const res = await requestUrl({
-      url: `https://www.reddit.com/r/${subreddit}/hot.json?limit=${limit}`,
-      headers: { "User-Agent": "ObsidianDailyResearch/1.0" },
-    });
-
-    return (res.json.data?.children || [])
-      .filter((c) => !c.data.stickied && c.data.url)
-      .map((c) => ({
-        title: c.data.title || "",
-        url: c.data.url.startsWith("/")
-          ? `https://reddit.com${c.data.url}`
-          : c.data.url,
-        source: `Reddit r/${subreddit}`,
-        score: c.data.score || 0,
-        snippet: (c.data.selftext || "").slice(0, 200),
-      }));
-  } catch (err) {
-    console.error(`Daily Research: Reddit r/${subreddit} fetch failed:`, err);
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Source: Google News RSS
 // ---------------------------------------------------------------------------
 
@@ -164,19 +104,16 @@ async function fetchAllSources(storyCount, interests) {
     .map((s) => s.trim())
     .join(" OR ");
 
-  const [hn, arxiv, redditML, redditLLM, google] = await Promise.all([
+  const [hn, google] = await Promise.all([
     fetchHNStories(storyCount),
-    fetchArxivPapers(10),
-    fetchRedditPosts("MachineLearning", 15),
-    fetchRedditPosts("LocalLLaMA", 10),
     fetchGoogleNews(googleQuery, 10),
   ]);
 
-  return [...hn, ...arxiv, ...redditML, ...redditLLM, ...google];
+  return [...hn, ...google];
 }
 
 // ---------------------------------------------------------------------------
-// Claude API — two-pass: rank candidates, then write full brief
+// Claude API — single pass: pick #1, write brief, list runners-up
 // ---------------------------------------------------------------------------
 
 async function callClaude(apiKey, model, system, userMsg) {
@@ -190,7 +127,7 @@ async function callClaude(apiKey, model, system, userMsg) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 1200,
       system,
       messages: [{ role: "user", content: userMsg }],
     }),
@@ -204,7 +141,7 @@ async function callClaude(apiKey, model, system, userMsg) {
   return res.json.content[0].text;
 }
 
-async function rankAndGenerate(apiKey, model, stories, interests, history) {
+async function generateResearch(apiKey, model, stories, interests, history) {
   const today = new Date().toISOString().slice(0, 10);
 
   const storiesText = stories
@@ -219,42 +156,16 @@ async function rankAndGenerate(apiKey, model, stories, interests, history) {
       ? `\nTopics already covered recently (AVOID these):\n${history.map((h) => `- ${h}`).join("\n")}`
       : "";
 
-  // Pass 1: rank top 5
-  const rankPrompt = `Here are today's (${today}) stories from multiple sources (HackerNews, arXiv, Reddit, Google News):
+  const prompt = `Here are today's (${today}) stories from HackerNews and Google News:
 
 ${storiesText}
 ${historyText}
 
-Your interests filter: ${interests}
+Interests: ${interests}
 
-From these, pick the TOP 5 most impactful stories for someone deeply into CS, agentic AI, and cybersecurity. Rank them 1-5.
+Do two things:
 
-For each, output EXACTLY this format (no extra text):
-RANK 1: [story number] | [short reason, 10 words max]
-RANK 2: [story number] | [short reason]
-RANK 3: [story number] | [short reason]
-RANK 4: [story number] | [short reason]
-RANK 5: [story number] | [short reason]
-PICK: [story number of your #1 choice]`;
-
-  const rankResult = await callClaude(apiKey, model, SYSTEM_PROMPT, rankPrompt);
-
-  // Extract the pick
-  const pickMatch = rankResult.match(/PICK:\s*(\d+)/);
-  const pickIdx = pickMatch ? parseInt(pickMatch[1], 10) - 1 : 0;
-  const picked = stories[Math.min(pickIdx, stories.length - 1)];
-
-  // Pass 2: generate full research brief for the winner
-  const briefPrompt = `Write a concise research note about this topic:
-
-Title: ${picked.title}
-URL: ${picked.url}
-Source: ${picked.source}
-Context: ${picked.snippet}
-
-The reader's interests: ${interests}
-
-Use EXACTLY this markdown format:
+1. Pick the ONE most impactful story and write a research note in this EXACT format:
 
 ### Daily Research: [Topic Title]
 **Source:** [url]
@@ -267,11 +178,23 @@ Use EXACTLY this markdown format:
 
 **Further reading:** [1-2 related search terms or topics]
 
-Keep it under 250 words. Be specific and technical.`;
+2. After the research note, add a "Also trending" section listing the next 4 best stories as clickable links. Use this EXACT format:
 
-  const brief = await callClaude(apiKey, model, SYSTEM_PROMPT, briefPrompt);
+**Also trending:**
+- [Title](url)
+- [Title](url)
+- [Title](url)
+- [Title](url)
 
-  return { brief, topicTitle: picked.title };
+Keep the research note under 250 words. Be specific and technical. The "Also trending" links should be concise titles only, no descriptions.`;
+
+  const result = await callClaude(apiKey, model, SYSTEM_PROMPT, prompt);
+
+  // Extract topic title from the response for history tracking
+  const titleMatch = result.match(/### Daily Research:\s*(.+)/);
+  const topicTitle = titleMatch ? titleMatch[1].trim() : stories[0]?.title || "Unknown";
+
+  return { brief: result, topicTitle };
 }
 
 // ---------------------------------------------------------------------------
@@ -316,10 +239,6 @@ class DailyResearchPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
-  // -----------------------------------------------------------------------
-  // Core logic
-  // -----------------------------------------------------------------------
-
   async runResearch() {
     if (!this.settings.apiKey) {
       new Notice("Daily Research: Set your Anthropic API key in settings.");
@@ -338,7 +257,7 @@ class DailyResearchPlugin extends Plugin {
       }
     }
 
-    new Notice("Daily Research: Fetching from HackerNews, arXiv, Reddit, Google News…");
+    new Notice("Daily Research: Fetching from HackerNews + Google News…");
 
     try {
       const stories = await fetchAllSources(
@@ -352,10 +271,10 @@ class DailyResearchPlugin extends Plugin {
       }
 
       new Notice(
-        `Daily Research: Ranking ${stories.length} stories across all sources…`
+        `Daily Research: Analyzing ${stories.length} stories with Claude…`
       );
 
-      const { brief, topicTitle } = await rankAndGenerate(
+      const { brief, topicTitle } = await generateResearch(
         this.settings.apiKey,
         this.settings.model,
         stories,
@@ -365,7 +284,6 @@ class DailyResearchPlugin extends Plugin {
 
       await this.appendToDaily(today, dailyPath, brief);
 
-      // Update history
       this.settings.topicHistory.push(topicTitle);
       if (this.settings.topicHistory.length > MAX_HISTORY) {
         this.settings.topicHistory = this.settings.topicHistory.slice(-MAX_HISTORY);
@@ -510,7 +428,6 @@ class DailyResearchSettingTab extends PluginSettingTab {
           })
       );
 
-    // Show topic history
     if (this.plugin.settings.topicHistory.length > 0) {
       containerEl.createEl("h3", { text: "Recent topics" });
       containerEl.createEl("p", {
