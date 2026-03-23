@@ -1,0 +1,14 @@
+/* Daily Research plugin styles */
+
+/* Research note container when rendered */
+.daily-research h3 {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 0.3em;
+  margin-top: 1.5em;
+}
+
+/* Settings tab textarea for interests */
+.daily-research-settings textarea {
+  width: 100%;
+  min-height: 60px;
+}

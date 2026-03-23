@@ -1,0 +1,9 @@
+{
+  "id": "daily-research",
+  "name": "Daily Research",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Auto-research trending CS and agentic AI topics from HackerNews and append a daily research brief to your daily note via Claude.",
+  "author": "rob-9",
+  "isDesktopOnly": true
+}
