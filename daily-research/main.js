@@ -18,12 +18,14 @@ const DEFAULT_SETTINGS = {
 
 const MAX_HISTORY = 30;
 
-const SYSTEM_PROMPT = `You are a research assistant for a UC Irvine Computer Science student \
-(specialization: Intelligent Systems) who is deeply interested in agentic AI, \
-multi-agent systems, MCP (Model Context Protocol), RAG, LLMs, cybersecurity, \
-and distributed systems. They are an incoming AI Engineering intern at \
-CrowdStrike and have built projects with LangGraph, vector databases, \
-knowledge graphs, and open-source agent frameworks.`;
+const SYSTEM_PROMPT = `You are a tech industry analyst who identifies the most \
+significant and broadly impactful stories in software engineering, AI, and \
+technology each day. You prioritize stories by their real-world importance — \
+major product launches, breakthrough research, significant security incidents, \
+industry shifts, policy changes, and notable open-source developments. \
+You do NOT inflate niche library bugs or minor updates into top stories. \
+A story about a small proxy tool having a bug is NOT as important as a major \
+model release, a significant acquisition, or a broadly impactful policy change.`;
 
 // ---------------------------------------------------------------------------
 // Source: HackerNews
@@ -98,18 +100,19 @@ async function fetchGoogleNews(query, limit = 10) {
 // ---------------------------------------------------------------------------
 
 async function fetchAllSources(storyCount, interests) {
-  const googleQuery = interests
+  const interestQuery = interests
     .split(",")
     .slice(0, 3)
     .map((s) => s.trim())
     .join(" OR ");
 
-  const [hn, google] = await Promise.all([
+  const [hn, googleInterests, googleGeneral] = await Promise.all([
     fetchHNStories(storyCount),
-    fetchGoogleNews(googleQuery, 10),
+    fetchGoogleNews(interestQuery, 5),
+    fetchGoogleNews("technology OR artificial intelligence OR software engineering", 5),
   ]);
 
-  return [...hn, ...google];
+  return [...hn, ...googleInterests, ...googleGeneral];
 }
 
 // ---------------------------------------------------------------------------
@@ -161,24 +164,27 @@ async function generateResearch(apiKey, model, stories, interests, history) {
 ${storiesText}
 ${historyText}
 
-Interests: ${interests}
+Topic filter (use to break ties, NOT as primary selection criteria): ${interests}
 
-Do two things:
+Pick the ONE story with the biggest real-world impact on the tech industry today. \
+Prefer stories that a senior engineer at any company would want to know about. \
+HackerNews score/comments can signal importance but don't blindly follow it — \
+a 500-point niche library bug is less important than a 200-point major industry shift.
 
-1. Pick the ONE most impactful story and write a research note in this EXACT format:
+Write a research note in this EXACT format:
 
 ### Daily Research: [Topic Title]
 **Source:** [url]
-**Why it matters:** [1-2 sentences]
+**Why it matters:** [1-2 sentences on broad industry impact]
 
 **Key takeaways:**
 - [3-5 bullet points]
 
-**Connections:** [1-2 sentences tying this to agentic RAG, MCP, multi-agent systems, cybersecurity, or the reader's projects]
+**What to watch:** [1-2 sentences on implications or what happens next]
 
 **Further reading:** [1-2 related search terms or topics]
 
-2. After the research note, add a "Also trending" section listing the next 4 best stories as clickable links. Use this EXACT format:
+Then add a "Also trending" section listing the next 4 best stories as clickable links:
 
 **Also trending:**
 - [Title](url)
@@ -186,7 +192,7 @@ Do two things:
 - [Title](url)
 - [Title](url)
 
-Keep the research note under 250 words. Be specific and technical. The "Also trending" links should be concise titles only, no descriptions.`;
+Keep the research note under 250 words. Be specific and technical.`;
 
   const result = await callClaude(apiKey, model, SYSTEM_PROMPT, prompt);
 
