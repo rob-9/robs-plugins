@@ -1,6 +1,15 @@
 const { Plugin, PluginSettingTab, Setting, Notice, requestUrl } = require("obsidian");
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// ---------------------------------------------------------------------------
 // Defaults
 // ---------------------------------------------------------------------------
 
@@ -145,7 +154,7 @@ async function callClaude(apiKey, model, system, userMsg) {
 }
 
 async function generateResearch(apiKey, model, stories, interests, history) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
 
   const storiesText = stories
     .map(
@@ -226,7 +235,7 @@ class DailyResearchPlugin extends Plugin {
     this.addSettingTab(new DailyResearchSettingTab(this.app, this));
 
     if (this.settings.runOnStartup) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = localToday();
       if (this.settings.lastRunDate !== today) {
         this.registerInterval(
           window.setTimeout(async () => {
@@ -251,7 +260,7 @@ class DailyResearchPlugin extends Plugin {
       return;
     }
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
 
     const dailyPath = `${this.settings.dailiesFolder}/${today}.md`;
     const existingFile = this.app.vault.getAbstractFileByPath(dailyPath);
