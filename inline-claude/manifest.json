@@ -1,0 +1,9 @@
+{
+	"id": "inline-claude",
+	"name": "Inline Claude",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Highlight text, ask Claude a question about it, and see the response in a sidebar panel. Uses the claude CLI.",
+	"author": "rob-9",
+	"isDesktopOnly": true
+}

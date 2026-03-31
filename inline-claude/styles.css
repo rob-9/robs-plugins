@@ -1,0 +1,81 @@
+.inline-claude-panel {
+  padding: 12px;
+}
+
+.inline-claude-panel h4 {
+  margin: 0 0 12px 0;
+}
+
+.inline-claude-selection {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  max-height: 150px;
+  overflow-y: auto;
+  font-size: 0.85em;
+  white-space: pre-wrap;
+  margin-bottom: 12px;
+  color: var(--text-muted);
+}
+
+.inline-claude-input {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.inline-claude-input:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+}
+
+.inline-claude-submit {
+  width: 100%;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+.inline-claude-loading {
+  color: var(--text-muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.inline-claude-response {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  overflow-x: auto;
+}
+
+.inline-claude-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.inline-claude-actions button {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.inline-claude-error {
+  color: var(--text-error);
+  padding: 8px 0;
+  font-size: 0.9em;
+}
