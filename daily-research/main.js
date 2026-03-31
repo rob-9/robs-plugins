@@ -255,6 +255,11 @@ class DailyResearchPlugin extends Plugin {
   }
 
   async runResearch() {
+    if (this._running) {
+      new Notice("Daily Research: Already running.");
+      return;
+    }
+
     if (!this.settings.apiKey) {
       new Notice("Daily Research: Set your Anthropic API key in settings.");
       return;
@@ -271,6 +276,11 @@ class DailyResearchPlugin extends Plugin {
         return;
       }
     }
+
+    this._running = true;
+    // Persist lastRunDate immediately to prevent duplicate startup triggers
+    this.settings.lastRunDate = today;
+    await this.saveSettings();
 
     new Notice("Daily Research: Fetching from HackerNews + Google News…");
 
@@ -303,13 +313,14 @@ class DailyResearchPlugin extends Plugin {
       if (this.settings.topicHistory.length > MAX_HISTORY) {
         this.settings.topicHistory = this.settings.topicHistory.slice(-MAX_HISTORY);
       }
-      this.settings.lastRunDate = today;
       await this.saveSettings();
 
       new Notice("Daily Research: Done! Check your daily note.");
     } catch (err) {
       console.error("Daily Research error:", err);
       new Notice(`Daily Research: Error — ${err.message}`);
+    } finally {
+      this._running = false;
     }
   }
 
