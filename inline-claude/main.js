@@ -13,19 +13,23 @@ const DEFAULT_SETTINGS = {
 // ─── Claude CLI Helper ───────────────────────────────────────────────────────
 
 function askClaude(prompt) {
-  return new Promise((resolve, reject) => {
-    const proc = spawn("claude", ["-p"], { env: { ...process.env } });
-    let out = "",
-      err = "";
-    proc.stdout.on("data", (d) => (out += d));
-    proc.stderr.on("data", (d) => (err += d));
+  const proc = spawn("claude", ["-p"]);
+  let out = "",
+    err = "";
+  proc.stdout.on("data", (d) => (out += d));
+  proc.stderr.on("data", (d) => (err += d));
+  const promise = new Promise((resolve, reject) => {
     proc.on("close", (code) =>
       code === 0 ? resolve(out) : reject(new Error(err || out))
     );
-    proc.on("error", (e) => reject(e));
-    proc.stdin.write(prompt);
-    proc.stdin.end();
+    proc.on("error", (e) =>
+      reject(new Error(`Failed to run claude CLI: ${e.message}`))
+    );
   });
+  proc.stdin.write(prompt);
+  proc.stdin.end();
+  promise.proc = proc;
+  return promise;
 }
 
 // ─── Sidebar View ─────────────────────────────────────────────────────────────
@@ -38,6 +42,7 @@ class InlineClaudeView extends obsidian.ItemView {
     this.document = "";
     this.editor = null;
     this.lastResponse = "";
+    this._activeProc = null;
   }
 
   getViewType() {
@@ -58,6 +63,7 @@ class InlineClaudeView extends obsidian.ItemView {
   }
 
   async onClose() {
+    if (this._activeProc) this._activeProc.kill();
     this.contentEl.empty();
   }
 
@@ -138,8 +144,13 @@ class InlineClaudeView extends obsidian.ItemView {
 
       const prompt = this.buildPrompt(question);
 
+      // Kill any in-flight request
+      if (this._activeProc) this._activeProc.kill();
+
       try {
-        const response = await askClaude(prompt);
+        const request = askClaude(prompt);
+        this._activeProc = request.proc;
+        const response = await request;
         this.lastResponse = response.trim();
 
         responseEl.empty();
@@ -162,6 +173,7 @@ class InlineClaudeView extends obsidian.ItemView {
           text: "Error: " + err.message,
         });
       } finally {
+        this._activeProc = null;
         loadingEl.style.display = "none";
         askBtn.disabled = false;
         textarea.disabled = false;
@@ -172,7 +184,7 @@ class InlineClaudeView extends obsidian.ItemView {
     askBtn.addEventListener("click", submitQuestion);
 
     // Focus textarea on open
-    setTimeout(() => textarea.focus(), 50);
+    requestAnimationFrame(() => textarea.focus());
   }
 
   buildPrompt(question) {
