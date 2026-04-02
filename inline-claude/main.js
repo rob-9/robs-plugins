@@ -11,8 +11,7 @@ const VIEW_TYPE = "inline-claude-chat";
 const DEFAULT_SETTINGS = {
   systemPrompt:
     "You are a helpful assistant embedded in an Obsidian note editor. The user will ask questions about selected text from their notes. Be concise. You have full access to their files via Claude Code.",
-  chatHue: "155, 114, 207",
-  selectionHue: "155, 114, 207",
+  hue: "155, 114, 207",
 };
 
 // ─── Claude Code CLI ────────────────────────────────────────────────────────
@@ -419,30 +418,52 @@ class InlineClaudeChatView extends obsidian.ItemView {
     // Header bar with session selector + new session button
     const headerBar = container.createDiv({ cls: "ic-chat-header" });
 
-    // Session dropdown — always shown, reads from Claude Code's session files
-    const select = headerBar.createEl("select", { cls: "ic-session-select" });
-    select.createEl("option", { value: "", text: "New session" });
-    for (const s of this.discoveredSessions.slice(0, 20)) {
-      const opt = select.createEl("option", {
-        value: s.id,
-        text: s.label,
-      });
-      if (s.id === this.plugin.sessionId) opt.selected = true;
-    }
-    if (!this.plugin.sessionId) select.value = "";
-
-    select.addEventListener("change", () => {
-      this.switchSession(select.value || null);
+    // Session dropdown — custom dropdown
+    const dropdownWrap = headerBar.createDiv({ cls: "ic-dropdown-wrap" });
+    const currentSession = this.discoveredSessions.find(s => s.id === this.plugin.sessionId);
+    const dropdownTrigger = dropdownWrap.createDiv({ cls: "ic-dropdown-trigger" });
+    const triggerLabel = dropdownTrigger.createEl("span", {
+      cls: "ic-dropdown-label",
+      text: currentSession ? currentSession.label : "New session",
     });
+    const triggerArrow = dropdownTrigger.createEl("span", { cls: "ic-dropdown-arrow", text: "▾" });
 
-    // New session button
-    const newBtn = headerBar.createEl("button", {
-      cls: "ic-chat-header-btn",
-      attr: { "aria-label": "New session" },
-    });
-    obsidian.setIcon(newBtn, "plus");
-    newBtn.addEventListener("click", () => {
+    const dropdownList = dropdownWrap.createDiv({ cls: "ic-dropdown-list" });
+
+    // New session option
+    const newOpt = dropdownList.createDiv({ cls: "ic-dropdown-item ic-dropdown-new" });
+    const newIcon = newOpt.createEl("span", { cls: "ic-dropdown-item-icon" });
+    obsidian.setIcon(newIcon, "plus");
+    newOpt.createEl("span", { text: "New session" });
+    newOpt.addEventListener("click", () => {
+      dropdownList.classList.remove("is-open");
       this.newSession();
+    });
+
+    // Session items
+    for (const s of this.discoveredSessions) {
+      const item = dropdownList.createDiv({ cls: "ic-dropdown-item" });
+      if (s.id === this.plugin.sessionId) item.addClass("is-active");
+      item.createEl("span", { cls: "ic-dropdown-item-text", text: s.label });
+      item.addEventListener("click", () => {
+        dropdownList.classList.remove("is-open");
+        this.switchSession(s.id);
+      });
+    }
+
+    dropdownTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const opening = !dropdownList.classList.contains("is-open");
+      dropdownList.classList.toggle("is-open");
+      if (opening) {
+        const close = (ev) => {
+          if (!dropdownWrap.contains(ev.target)) {
+            dropdownList.classList.remove("is-open");
+            document.removeEventListener("click", close, true);
+          }
+        };
+        document.addEventListener("click", close, true);
+      }
     });
 
     // Selection display
@@ -459,7 +480,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
       });
 
       const body = selBlock.createDiv({ cls: "ic-chat-selection-body" });
-      body.innerText = this.selectionText;
+      obsidian.MarkdownRenderer.render(this.app, this.selectionText, body, "", this.plugin);
 
       header.addEventListener("click", () => {
         const collapsed = body.classList.toggle("is-collapsed");
@@ -725,8 +746,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
 class InlineClaudePlugin extends obsidian.Plugin {
   applyHues() {
     const root = document.documentElement;
-    root.style.setProperty("--ic-chat-hue", this.settings.chatHue);
-    root.style.setProperty("--ic-sel-hue", this.settings.selectionHue);
+    root.style.setProperty("--ic-hue", this.settings.hue);
   }
 
   async onload() {
@@ -754,7 +774,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
     // Floating "Ask Claude" tooltip on text selection
     this.tooltipEl = document.createElement("div");
     this.tooltipEl.className = "ic-selection-tooltip";
-    this.tooltipEl.innerText = "Ask Claude";
+    this.tooltipEl.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;position:relative;top:1.2px;left:-2px"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z"/></svg><span>Ask Claude</span>';
     this.tooltipEl.style.display = "none";
     document.body.appendChild(this.tooltipEl);
 
@@ -804,7 +824,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
   showTooltip(x, y) {
     this.tooltipEl.style.display = "block";
     this.tooltipEl.style.left = x + "px";
-    this.tooltipEl.style.top = y - 40 + "px";
+    this.tooltipEl.style.top = y + 10 + "px";
 
     requestAnimationFrame(() => {
       const rect = this.tooltipEl.getBoundingClientRect();
@@ -908,28 +928,14 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
       );
 
     new obsidian.Setting(containerEl)
-      .setName("Chat hue")
-      .setDesc("RGB values for chat bubbles, buttons, spinner (e.g. 155, 114, 207)")
+      .setName("Hue")
+      .setDesc("RGB values for theme color (e.g. 155, 114, 207 for lilac)")
       .addText((t) =>
         t
           .setPlaceholder("155, 114, 207")
-          .setValue(this.plugin.settings.chatHue)
+          .setValue(this.plugin.settings.hue)
           .onChange(async (v) => {
-            this.plugin.settings.chatHue = v.trim();
-            await this.plugin.saveSettings();
-            this.plugin.applyHues();
-          })
-      );
-
-    new obsidian.Setting(containerEl)
-      .setName("Selection hue")
-      .setDesc("RGB values for selected text section (e.g. 100, 160, 220)")
-      .addText((t) =>
-        t
-          .setPlaceholder("100, 160, 220")
-          .setValue(this.plugin.settings.selectionHue)
-          .onChange(async (v) => {
-            this.plugin.settings.selectionHue = v.trim();
+            this.plugin.settings.hue = v.trim();
             await this.plugin.saveSettings();
             this.plugin.applyHues();
           })
