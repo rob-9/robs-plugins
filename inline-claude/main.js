@@ -32,7 +32,24 @@ function findClaude() {
   return "claude"; // fallback, hope it's in PATH
 }
 
-function callClaudeCode(prompt, sessionId, cwd, onStream) {
+function formatToolUse(name, input) {
+  const file = input?.file_path?.split("/").pop();
+  switch (name) {
+    case "Read": return `Reading ${file || "file"}…`;
+    case "Edit": return `Editing ${file || "file"}…`;
+    case "Write": return `Writing ${file || "file"}…`;
+    case "MultiEdit": return `Editing ${file || "file"}…`;
+    case "Bash": return `Running command…`;
+    case "Grep": return `Searching files…`;
+    case "Glob": return `Finding files…`;
+    case "WebSearch": return `Searching the web…`;
+    case "WebFetch": return `Fetching page…`;
+    case "TodoWrite": return `Updating tasks…`;
+    default: return `Using ${name}…`;
+  }
+}
+
+function callClaudeCode(prompt, sessionId, cwd, onStream, onToolUse) {
   const controller = { proc: null };
 
   const promise = new Promise((resolve, reject) => {
@@ -71,6 +88,12 @@ function callClaudeCode(prompt, sessionId, cwd, onStream) {
           const event = JSON.parse(line);
 
           if (event.type === "assistant" && event.message?.content) {
+            // Surface tool usage as progress indicators
+            for (const block of event.message.content) {
+              if (block.type === "tool_use" && onToolUse) {
+                onToolUse(block.name, block.input);
+              }
+            }
             // Extract text from content blocks
             const text = event.message.content
               .filter((b) => b.type === "text")
@@ -226,6 +249,9 @@ class InlineClaudeChatView extends obsidian.ItemView {
           obsidian.MarkdownRenderer.render(
             this.app, msg.content, bubble, "", this.plugin
           );
+        } else if (msg.toolActivity) {
+          bubble.createEl("span", { cls: "ic-spinner" });
+          bubble.createEl("span", { text: " " + msg.toolActivity });
         } else {
           bubble.createEl("span", { cls: "ic-spinner" });
           bubble.createEl("span", { text: " Thinking…" });
@@ -365,11 +391,19 @@ class InlineClaudeChatView extends obsidian.ItemView {
     });
   }
 
-  renderStreamBubble(text) {
+  renderStreamBubble(text, toolActivity) {
     const el = this.contentEl.querySelector(".ic-chat-stream-bubble");
     if (!el) return;
     el.empty();
-    obsidian.MarkdownRenderer.render(this.app, text, el, "", this.plugin);
+    if (text) {
+      obsidian.MarkdownRenderer.render(this.app, text, el, "", this.plugin);
+    } else if (toolActivity) {
+      el.createEl("span", { cls: "ic-spinner" });
+      el.createEl("span", { text: " " + toolActivity });
+    } else {
+      el.createEl("span", { cls: "ic-spinner" });
+      el.createEl("span", { text: " Thinking…" });
+    }
     // Scroll to bottom
     const messagesEl = this.contentEl.querySelector(".ic-chat-messages");
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -408,7 +442,15 @@ class InlineClaudeChatView extends obsidian.ItemView {
         (text) => {
           accumulated = text;
           streamMsg.content = text;
+          streamMsg.toolActivity = null;
           this.renderStreamBubble(text);
+        },
+        (toolName, toolInput) => {
+          const activity = formatToolUse(toolName, toolInput);
+          streamMsg.toolActivity = activity;
+          if (!streamMsg.content) {
+            this.renderStreamBubble(null, activity);
+          }
         }
       );
 

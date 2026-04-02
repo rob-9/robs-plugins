@@ -107,6 +107,8 @@
   border: 1px solid rgba(var(--ic-sel-hue), 0.15);
   border-radius: 8px;
   transition: max-height 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .ic-chat-selection-body::-webkit-scrollbar {
@@ -180,6 +182,8 @@
   line-height: var(--line-height-normal);
   word-wrap: break-word;
   overflow-x: auto;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* User bubbles */
