@@ -56,8 +56,8 @@ class InlineClaudeModal extends obsidian.Modal {
     const selSection = contentEl.createDiv({ cls: "ic-section" });
     selSection.createEl("label", { text: "Selected text", cls: "ic-label" });
     const selBox = selSection.createDiv({ cls: "ic-selection" });
-    const selText = String(this.selection);
-    selBox.textContent = selText.length > 500 ? selText.slice(0, 500) + "…" : selText;
+    const selText = typeof this.selection === "string" ? this.selection : JSON.stringify(this.selection);
+    selBox.setText(selText.length > 500 ? selText.slice(0, 500) + "…" : selText);
 
     // Question input
     const inputSection = contentEl.createDiv({ cls: "ic-section" });
@@ -208,21 +208,18 @@ class InlineClaudePlugin extends obsidian.Plugin {
     this.addCommand({
       id: "ask-claude-about-selection",
       name: "Ask Claude about selection",
-      editorCallback: (editor) => {
-        this.openModal(editor);
-      },
+      editorCallback: () => this.openModal(),
     });
 
     // Right-click context menu
     this.registerEvent(
       this.app.workspace.on("editor-menu", (menu, editor) => {
-        const selection = editor.getSelection();
-        if (!selection) return;
+        if (!editor.getSelection()) return;
         menu.addItem((item) => {
           item
             .setTitle("Ask Claude")
             .setIcon("message-circle")
-            .onClick(() => this.openModal(editor));
+            .onClick(() => this.openModal());
         });
       })
     );
@@ -230,19 +227,20 @@ class InlineClaudePlugin extends obsidian.Plugin {
     this.addSettingTab(new InlineClaudeSettingTab(this.app, this));
   }
 
-  openModal(editor) {
+  openModal() {
+    const view = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
+    if (!view) {
+      new obsidian.Notice("Open a markdown file first.");
+      return;
+    }
+    const editor = view.editor;
     const selection = editor.getSelection();
     if (!selection) {
       new obsidian.Notice("Select some text first.");
       return;
     }
-    new InlineClaudeModal(
-      this.app,
-      this,
-      selection,
-      editor.getValue(),
-      editor
-    ).open();
+    const doc = editor.getValue();
+    new InlineClaudeModal(this.app, this, selection, doc, editor).open();
   }
 
   async loadSettings() {
