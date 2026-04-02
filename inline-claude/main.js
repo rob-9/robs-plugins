@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   systemPrompt:
     "You are a helpful assistant embedded in an Obsidian note editor. The user will ask questions about selected text from their notes. Be concise. You have full access to their files via Claude Code.",
   chatHue: "155, 114, 207",
-  selectionHue: "100, 160, 220",
+  selectionHue: "155, 114, 207",
 };
 
 // ─── Claude Code CLI ────────────────────────────────────────────────────────
@@ -304,17 +304,21 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
   async onOpen() {
     this.contentEl.addClass("ic-chat-container");
+    this.contentEl.addClass("ic-entering");
     this.refreshSessions();
   }
 
   async refreshSessions() {
     const cwd = this.app.vault.adapter.basePath;
     this.discoveredSessions = await discoverSessions(cwd);
+    if (this.plugin.sessionId && this.messages.length === 0) {
+      this.messages = await loadSessionHistory(cwd, this.plugin.sessionId);
+    }
     this.render();
   }
 
   addStatus(text) {
-    this.messages.push({ role: "status", content: text });
+    this.messages.push({ role: "status", content: text, _new: true });
     this.render();
   }
 
@@ -468,16 +472,20 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
     for (const msg of this.messages) {
       if (msg.role === "status") {
-        messagesEl.createDiv({
+        const statusEl = messagesEl.createDiv({
           cls: "ic-chat-status",
           text: msg.content,
         });
+        if (msg._new) statusEl.addClass("ic-new");
+        msg._new = false;
         continue;
       }
 
       const row = messagesEl.createDiv({
         cls: `ic-chat-row ic-chat-${msg.role}`,
       });
+      if (msg._new) row.addClass("ic-new");
+      msg._new = false;
       const bubble = row.createDiv({ cls: "ic-chat-bubble" });
 
       if (msg.role === "assistant" && msg.streaming) {
@@ -552,7 +560,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
             return;
           }
           const filePath = file.path;
-          this.messages.push({ role: "assistant", content: "Adding to file…" });
+          this.messages.push({ role: "assistant", content: "Adding to file…", _new: true });
           this.render();
 
           try {
@@ -564,10 +572,10 @@ class InlineClaudeChatView extends obsidian.ItemView {
               "Just integrate this new content where it fits best:\n\n" +
               msg.content;
             await callClaudeCode(prompt, this.plugin.sessionId, cwd);
-            this.messages.push({ role: "assistant", content: "Added to file." });
+            this.messages.push({ role: "assistant", content: "Added to file.", _new: true });
             this.render();
           } catch (err) {
-            this.messages.push({ role: "assistant", content: "**Failed:** " + err.message });
+            this.messages.push({ role: "assistant", content: "**Failed:** " + err.message, _new: true });
             this.render();
           }
         });
@@ -644,10 +652,10 @@ class InlineClaudeChatView extends obsidian.ItemView {
         text
       : text;
 
-    this.messages.push({ role: "user", content: prompt, display: text });
+    this.messages.push({ role: "user", content: prompt, display: text, _new: true });
 
     // Add a streaming assistant message placeholder
-    const streamMsg = { role: "assistant", content: "", streaming: true };
+    const streamMsg = { role: "assistant", content: "", streaming: true, _new: true };
     this.messages.push(streamMsg);
     this.isLoading = true;
     this.render();
