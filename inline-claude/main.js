@@ -32,13 +32,14 @@ function findClaude() {
   return "claude"; // fallback, hope it's in PATH
 }
 
-function callClaudeCode(prompt, sessionId, cwd) {
+function callClaudeCode(prompt, sessionId, cwd, onStream) {
   const controller = { proc: null };
 
   const promise = new Promise((resolve, reject) => {
     const args = [
       "-p", prompt,
-      "--output-format", "json",
+      "--output-format", "stream-json",
+      "--verbose",
       "--dangerously-skip-permissions",
     ];
     if (sessionId) {
@@ -53,12 +54,38 @@ function callClaudeCode(prompt, sessionId, cwd) {
     proc.stdin.end();
     controller.proc = proc;
 
-    let stdout = "";
+    let buffer = "";
     let stderr = "";
+    let resultSessionId = null;
 
     proc.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
+      buffer += chunk.toString();
+
+      // Parse newline-delimited JSON
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+
+          if (event.type === "assistant" && event.message?.content) {
+            // Extract text from content blocks
+            const text = event.message.content
+              .filter((b) => b.type === "text")
+              .map((b) => b.text)
+              .join("");
+            if (text && onStream) onStream(text);
+          }
+
+          if (event.type === "result") {
+            resultSessionId = event.session_id || null;
+          }
+        } catch {}
+      }
     });
+
     proc.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
     });
@@ -66,19 +93,27 @@ function callClaudeCode(prompt, sessionId, cwd) {
     proc.on("error", (err) => reject(err));
 
     proc.on("close", (code) => {
+      // Flush remaining buffer
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer);
+          if (event.type === "result") {
+            resultSessionId = event.session_id || null;
+            resolve({
+              text: event.result || "",
+              sessionId: resultSessionId,
+            });
+            return;
+          }
+        } catch {}
+      }
+
       if (code !== 0) {
         reject(new Error(stderr || `Claude Code exited with code ${code}`));
         return;
       }
-      try {
-        const result = JSON.parse(stdout);
-        resolve({
-          text: result.result || stdout.trim(),
-          sessionId: result.session_id || null,
-        });
-      } catch {
-        resolve({ text: stdout.trim(), sessionId: null });
-      }
+
+      resolve({ text: "", sessionId: resultSessionId });
     });
   });
 
@@ -184,6 +219,36 @@ class InlineClaudeChatView extends obsidian.ItemView {
       });
       const bubble = row.createDiv({ cls: "ic-chat-bubble" });
 
+      if (msg.role === "assistant" && msg.streaming) {
+        // Streaming bubble — updated in-place by renderStreamBubble
+        bubble.addClass("ic-chat-stream-bubble");
+        if (msg.content) {
+          obsidian.MarkdownRenderer.render(
+            this.app, msg.content, bubble, "", this.plugin
+          );
+        } else {
+          bubble.createEl("span", { cls: "ic-spinner" });
+          bubble.createEl("span", { text: " Thinking…" });
+        }
+        // Cancel button
+        const actions = row.createDiv({ cls: "ic-chat-actions" });
+        const cancelBtn = actions.createEl("button", {
+          cls: "ic-chat-cancel-btn",
+          text: "Cancel",
+        });
+        cancelBtn.addEventListener("click", () => {
+          if (this.activeRequest) {
+            this.activeRequest.cancel();
+            this.activeRequest = null;
+          }
+          msg.streaming = false;
+          msg.content = msg.content || "*Cancelled.*";
+          this.isLoading = false;
+          this.render();
+        });
+        continue;
+      }
+
       if (msg.role === "assistant") {
         obsidian.MarkdownRenderer.render(
           this.app,
@@ -263,31 +328,6 @@ class InlineClaudeChatView extends obsidian.ItemView {
       }
     }
 
-    // Loading + cancel
-    if (this.isLoading) {
-      const row = messagesEl.createDiv({
-        cls: "ic-chat-row ic-chat-assistant",
-      });
-      const bubble = row.createDiv({
-        cls: "ic-chat-bubble ic-chat-loading-bubble",
-      });
-      bubble.createEl("span", { cls: "ic-spinner" });
-      bubble.createEl("span", { text: " Thinking…" });
-      const cancelBtn = bubble.createEl("button", {
-        cls: "ic-chat-cancel-btn",
-        text: "Cancel",
-      });
-      cancelBtn.addEventListener("click", () => {
-        if (this.activeRequest) {
-          this.activeRequest.cancel();
-          this.activeRequest = null;
-        }
-        this.isLoading = false;
-        this.messages.push({ role: "status", content: "Cancelled." });
-        this.render();
-      });
-    }
-
     // Input area
     const inputArea = container.createDiv({ cls: "ic-chat-input-area" });
     const inputWrap = inputArea.createDiv({ cls: "ic-chat-input-wrap" });
@@ -325,6 +365,16 @@ class InlineClaudeChatView extends obsidian.ItemView {
     });
   }
 
+  renderStreamBubble(text) {
+    const el = this.contentEl.querySelector(".ic-chat-stream-bubble");
+    if (!el) return;
+    el.empty();
+    obsidian.MarkdownRenderer.render(this.app, text, el, "", this.plugin);
+    // Scroll to bottom
+    const messagesEl = this.contentEl.querySelector(".ic-chat-messages");
+    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
   async sendMessage(text) {
     if (!text || this.isLoading) return;
 
@@ -340,25 +390,40 @@ class InlineClaudeChatView extends obsidian.ItemView {
       : text;
 
     this.messages.push({ role: "user", content: prompt, display: text });
+
+    // Add a streaming assistant message placeholder
+    const streamMsg = { role: "assistant", content: "", streaming: true };
+    this.messages.push(streamMsg);
     this.isLoading = true;
     this.render();
 
     try {
       const cwd = this.app.vault.adapter.basePath;
-      this.activeRequest = callClaudeCode(prompt, this.sessionId, cwd);
+      let accumulated = "";
+
+      this.activeRequest = callClaudeCode(
+        prompt,
+        this.sessionId,
+        cwd,
+        (text) => {
+          accumulated = text;
+          streamMsg.content = text;
+          this.renderStreamBubble(text);
+        }
+      );
+
       const result = await this.activeRequest;
 
-      // Store session ID for follow-ups
+      // Finalize with result text (may be more complete than streamed chunks)
+      streamMsg.content = result.text || accumulated;
+      streamMsg.streaming = false;
+
       if (result.sessionId) {
         this.sessionId = result.sessionId;
       }
-
-      this.messages.push({ role: "assistant", content: result.text });
     } catch (err) {
-      this.messages.push({
-        role: "assistant",
-        content: `**Error:** ${err.message}`,
-      });
+      streamMsg.content = `**Error:** ${err.message}`;
+      streamMsg.streaming = false;
     } finally {
       this.activeRequest = null;
       this.isLoading = false;
