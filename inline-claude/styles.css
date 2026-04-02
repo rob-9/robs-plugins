@@ -47,33 +47,66 @@
 /* Header bar */
 .ic-chat-header {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
   padding: 6px 10px;
   flex-shrink: 0;
 }
 
-.ic-chat-new-session-btn {
+.ic-session-select {
+  flex: 1;
+  min-width: 0;
+  max-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid rgba(var(--ic-chat-hue), 0.2);
+  border-radius: 6px;
+  background: rgba(var(--ic-chat-hue), 0.06);
+  color: var(--text-normal);
+  font-size: var(--font-ui-smaller);
+  font-family: var(--font-interface);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%239b9b9b'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+  text-overflow: ellipsis;
+}
+
+.ic-session-select:hover {
+  border-color: rgba(var(--ic-chat-hue), 0.4);
+}
+
+.ic-session-select:focus {
+  border-color: rgba(var(--ic-chat-hue), 0.5);
+}
+
+.ic-chat-header-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 1px solid rgba(var(--ic-chat-hue), 0.2);
   border-radius: 6px;
   background: transparent;
-  color: rgba(var(--ic-chat-hue), 0.7);
-  font-size: var(--font-ui-smaller);
+  color: rgba(var(--ic-chat-hue), 0.6);
   cursor: pointer;
+  flex-shrink: 0;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.ic-chat-new-session-btn:hover {
+.ic-chat-header-btn:hover {
   background: rgba(var(--ic-chat-hue), 0.12);
   color: rgba(var(--ic-chat-hue), 1);
 }
 
-.ic-chat-new-session-btn svg {
-  width: 12px;
-  height: 12px;
+.ic-chat-header-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Selection display */
@@ -291,21 +324,6 @@
   font-size: var(--font-ui-small);
 }
 
-.ic-chat-cancel-btn {
-  margin-left: 8px;
-  padding: 2px 10px;
-  border: 1px solid rgba(var(--ic-chat-hue), 0.3);
-  border-radius: 4px;
-  background: transparent;
-  color: rgba(var(--ic-chat-hue), 0.8);
-  font-size: var(--font-ui-smaller);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.ic-chat-cancel-btn:hover {
-  background: rgba(var(--ic-chat-hue), 0.15);
-}
 
 /* Input area — rainbow border via wrapper */
 .ic-chat-input-area {
@@ -315,7 +333,7 @@
 }
 
 .ic-chat-input-wrap {
-  padding: 2px;
+  padding: 1.5px;
   border-radius: 10px;
   background: linear-gradient(135deg, #b827fc 0%, #2c90fc 25%, #b8fd33 50%, #fec837 75%, #fd1892 100%);
   display: flex;

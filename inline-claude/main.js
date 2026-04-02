@@ -1,6 +1,8 @@
 const obsidian = require("obsidian");
 const { spawn } = require("child_process");
 const path = require("path");
+const fs = require("fs");
+const readline = require("readline");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,133 @@ function formatToolUse(name, input) {
     case "TodoWrite": return `Updating tasks…`;
     default: return `Using ${name}…`;
   }
+}
+
+/**
+ * Discover Claude Code sessions for a given project cwd by reading
+ * ~/.claude/projects/<project-dir>/*.jsonl files.
+ */
+async function discoverSessions(cwd) {
+  const projectDir = path.join(
+    process.env.HOME || "",
+    ".claude",
+    "projects",
+    cwd.replace(/\//g, "-")
+  );
+
+  let files;
+  try {
+    files = fs.readdirSync(projectDir).filter((f) => f.endsWith(".jsonl"));
+  } catch {
+    return [];
+  }
+
+  const sessions = [];
+  for (const file of files) {
+    const sessionId = file.replace(".jsonl", "");
+    const filePath = path.join(projectDir, file);
+    try {
+      const stat = fs.statSync(filePath);
+      // Read first few lines to find the first user message
+      const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+      const rl = readline.createInterface({ input: stream });
+      let label = "";
+      let linesRead = 0;
+      for await (const line of rl) {
+        if (++linesRead > 10) break;
+        try {
+          const event = JSON.parse(line);
+          if (event.type === "user" && event.message?.content) {
+            const content = typeof event.message.content === "string"
+              ? event.message.content
+              : event.message.content
+                  .filter((b) => b.type === "text")
+                  .map((b) => b.text)
+                  .join("");
+            // Extract the actual question if prompt has ## Question section
+            const qMatch = content.match(/## Question\n([\s\S]*)/);
+            if (qMatch) {
+              label = qMatch[1].trim().split("\n")[0];
+            } else {
+              label = content.replace(/^#+\s*/gm, "").trim().split("\n")[0];
+            }
+            if (label.length > 50) label = label.slice(0, 50) + "…";
+            break;
+          }
+        } catch {}
+      }
+      rl.close();
+      stream.destroy();
+
+      sessions.push({
+        id: sessionId,
+        label: label || sessionId.slice(0, 8),
+        mtime: stat.mtimeMs,
+      });
+    } catch {}
+  }
+
+  // Sort by most recently modified
+  sessions.sort((a, b) => b.mtime - a.mtime);
+  return sessions;
+}
+
+/**
+ * Load conversation history from a session's JSONL file.
+ * Returns an array of { role, content, display? } messages.
+ */
+async function loadSessionHistory(cwd, sessionId) {
+  const projectDir = path.join(
+    process.env.HOME || "",
+    ".claude",
+    "projects",
+    cwd.replace(/\//g, "-")
+  );
+  const filePath = path.join(projectDir, `${sessionId}.jsonl`);
+
+  const messages = [];
+  try {
+    const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+    const rl = readline.createInterface({ input: stream });
+
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+
+        if (event.type === "user" && event.message?.content) {
+          const raw = typeof event.message.content === "string"
+            ? event.message.content
+            : event.message.content
+                .filter((b) => b.type === "text")
+                .map((b) => b.text)
+                .join("");
+          // Skip tool result messages (no text content)
+          if (!raw.trim()) continue;
+          // Extract display text — use question part if prompt has context prefix
+          const qMatch = raw.match(/## Question\n([\s\S]*)/);
+          const display = qMatch ? qMatch[1].trim() : raw.split("\n")[0];
+          messages.push({ role: "user", content: raw, display });
+        }
+
+        if (event.type === "assistant" && event.message?.content) {
+          const text = (Array.isArray(event.message.content)
+            ? event.message.content : [event.message.content])
+            .filter((b) => b.type === "text")
+            .map((b) => b.text)
+            .join("");
+          if (text) {
+            messages.push({ role: "assistant", content: text });
+          }
+        }
+      } catch {}
+    }
+
+    rl.close();
+    stream.destroy();
+  } catch {}
+
+  return messages;
 }
 
 function callClaudeCode(prompt, sessionId, cwd, onStream, onToolUse, systemPrompt) {
@@ -159,6 +288,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.selectionText = "";
     this.docText = "";
     this.isLoading = false;
+    this.discoveredSessions = [];
+    this.sessionMessageCache = new Map();
   }
 
   getViewType() {
@@ -173,6 +304,12 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
   async onOpen() {
     this.contentEl.addClass("ic-chat-container");
+    this.refreshSessions();
+  }
+
+  async refreshSessions() {
+    const cwd = this.app.vault.adapter.basePath;
+    this.discoveredSessions = await discoverSessions(cwd);
     this.render();
   }
 
@@ -193,30 +330,108 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.render();
   }
 
+  _cacheCurrentSession() {
+    const key = this.plugin.sessionId || "__new__";
+    if (this.messages.length > 0) {
+      this.sessionMessageCache.set(key, {
+        messages: [...this.messages],
+        selectionText: this.selectionText,
+        docText: this.docText,
+      });
+    }
+  }
+
+  _restoreSession(sessionId) {
+    const key = sessionId || "__new__";
+    const cached = this.sessionMessageCache.get(key);
+    if (cached) {
+      this.messages = [...cached.messages];
+      this.selectionText = cached.selectionText;
+      this.docText = cached.docText;
+    } else {
+      this.messages = [];
+      this.selectionText = "";
+      this.docText = "";
+    }
+  }
+
+  async switchSession(sessionId) {
+    if (this.activeRequest) {
+      this.activeRequest.cancel();
+      this.activeRequest = null;
+    }
+    this.isLoading = false;
+    this._cacheCurrentSession();
+    this.plugin.sessionId = sessionId;
+    this.plugin.saveSettings();
+
+    // Restore from local cache, or load from JSONL on disk
+    const key = sessionId || "__new__";
+    const cached = this.sessionMessageCache.get(key);
+    if (cached) {
+      this.messages = [...cached.messages];
+      this.selectionText = cached.selectionText;
+      this.docText = cached.docText;
+    } else if (sessionId) {
+      const cwd = this.app.vault.adapter.basePath;
+      this.messages = await loadSessionHistory(cwd, sessionId);
+      this.selectionText = "";
+      this.docText = "";
+    } else {
+      this.messages = [];
+      this.selectionText = "";
+      this.docText = "";
+    }
+
+    this.render();
+  }
+
+  newSession() {
+    if (this.activeRequest) {
+      this.activeRequest.cancel();
+      this.activeRequest = null;
+    }
+    this.isLoading = false;
+    this._cacheCurrentSession();
+    this.plugin.sessionId = null;
+    this.plugin.saveSettings();
+    this.messages = [];
+    this.selectionText = "";
+    this.docText = "";
+    this.refreshSessions();
+  }
+
   render() {
     const container = this.contentEl;
     container.empty();
 
-    // Header bar with New Session button
+    // Header bar with session selector + new session button
     const headerBar = container.createDiv({ cls: "ic-chat-header" });
+
+    // Session dropdown — always shown, reads from Claude Code's session files
+    const select = headerBar.createEl("select", { cls: "ic-session-select" });
+    select.createEl("option", { value: "", text: "New session" });
+    for (const s of this.discoveredSessions.slice(0, 20)) {
+      const opt = select.createEl("option", {
+        value: s.id,
+        text: s.label,
+      });
+      if (s.id === this.plugin.sessionId) opt.selected = true;
+    }
+    if (!this.plugin.sessionId) select.value = "";
+
+    select.addEventListener("change", () => {
+      this.switchSession(select.value || null);
+    });
+
+    // New session button
     const newBtn = headerBar.createEl("button", {
-      cls: "ic-chat-new-session-btn",
+      cls: "ic-chat-header-btn",
       attr: { "aria-label": "New session" },
     });
-    obsidian.setIcon(newBtn, "rotate-ccw");
-    newBtn.createEl("span", { text: " New session" });
+    obsidian.setIcon(newBtn, "plus");
     newBtn.addEventListener("click", () => {
-      if (this.activeRequest) {
-        this.activeRequest.cancel();
-        this.activeRequest = null;
-      }
-      this.isLoading = false;
-      this.plugin.sessionId = null;
-      this.plugin.saveSettings();
-      this.messages = [];
-      this.selectionText = "";
-      this.docText = "";
-      this.render();
+      this.newSession();
     });
 
     // Selection display
@@ -279,22 +494,6 @@ class InlineClaudeChatView extends obsidian.ItemView {
           bubble.createEl("span", { cls: "ic-spinner" });
           bubble.createEl("span", { text: " Thinking…" });
         }
-        // Cancel button
-        const actions = row.createDiv({ cls: "ic-chat-actions" });
-        const cancelBtn = actions.createEl("button", {
-          cls: "ic-chat-cancel-btn",
-          text: "Cancel",
-        });
-        cancelBtn.addEventListener("click", () => {
-          if (this.activeRequest) {
-            this.activeRequest.cancel();
-            this.activeRequest = null;
-          }
-          msg.streaming = false;
-          msg.content = msg.content || "*Cancelled.*";
-          this.isLoading = false;
-          this.render();
-        });
         continue;
       }
 
@@ -407,10 +606,9 @@ class InlineClaudeChatView extends obsidian.ItemView {
       }
     });
 
-    // Scroll to bottom + focus
+    // Scroll to bottom
     requestAnimationFrame(() => {
       messagesEl.scrollTop = messagesEl.scrollHeight;
-      if (!this.isLoading) textarea.focus();
     });
   }
 
@@ -485,8 +683,13 @@ class InlineClaudeChatView extends obsidian.ItemView {
       streamMsg.streaming = false;
 
       if (result.sessionId) {
+        const isNew = this.plugin.sessionId !== result.sessionId;
         this.plugin.sessionId = result.sessionId;
-        this.plugin.saveSettings();
+        if (isNew) {
+          this.plugin.addSession(result.sessionId, text);
+        } else {
+          this.plugin.saveSettings();
+        }
       }
     } catch (err) {
       streamMsg.content = `**Error:** ${err.message}`;
@@ -627,10 +830,34 @@ class InlineClaudePlugin extends obsidian.Plugin {
     const data = (await this.loadData()) || {};
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
     this.sessionId = data.sessionId || null;
+    this.sessions = data.sessions || [];
   }
 
   async saveSettings() {
-    await this.saveData({ ...this.settings, sessionId: this.sessionId });
+    await this.saveData({
+      ...this.settings,
+      sessionId: this.sessionId,
+      sessions: this.sessions,
+    });
+  }
+
+  addSession(id, label) {
+    // Don't duplicate
+    if (this.sessions.find((s) => s.id === id)) return;
+    this.sessions.unshift({
+      id,
+      label: label.length > 40 ? label.slice(0, 40) + "…" : label,
+      createdAt: Date.now(),
+    });
+    // Keep at most 30 sessions
+    if (this.sessions.length > 30) this.sessions.pop();
+    this.saveSettings();
+  }
+
+  removeSession(id) {
+    this.sessions = this.sessions.filter((s) => s.id !== id);
+    if (this.sessionId === id) this.sessionId = null;
+    this.saveSettings();
   }
 }
 
@@ -692,3 +919,10 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
 }
 
 module.exports = InlineClaudePlugin;
+InlineClaudePlugin._test = {
+  InlineClaudeChatView,
+  discoverSessions,
+  loadSessionHistory,
+  formatToolUse,
+  VIEW_TYPE,
+};
