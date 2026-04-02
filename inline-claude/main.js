@@ -56,10 +56,8 @@ class InlineClaudeModal extends obsidian.Modal {
     const selSection = contentEl.createDiv({ cls: "ic-section" });
     selSection.createEl("label", { text: "Selected text", cls: "ic-label" });
     const selBox = selSection.createDiv({ cls: "ic-selection" });
-    selBox.textContent =
-      this.selection.length > 500
-        ? this.selection.slice(0, 500) + "…"
-        : this.selection;
+    const selText = String(this.selection);
+    selBox.textContent = selText.length > 500 ? selText.slice(0, 500) + "…" : selText;
 
     // Question input
     const inputSection = contentEl.createDiv({ cls: "ic-section" });
@@ -211,22 +209,40 @@ class InlineClaudePlugin extends obsidian.Plugin {
       id: "ask-claude-about-selection",
       name: "Ask Claude about selection",
       editorCallback: (editor) => {
-        const selection = editor.getSelection();
-        if (!selection) {
-          new obsidian.Notice("Select some text first.");
-          return;
-        }
-        new InlineClaudeModal(
-          this.app,
-          this,
-          selection,
-          editor.getValue(),
-          editor
-        ).open();
+        this.openModal(editor);
       },
     });
 
+    // Right-click context menu
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        const selection = editor.getSelection();
+        if (!selection) return;
+        menu.addItem((item) => {
+          item
+            .setTitle("Ask Claude")
+            .setIcon("message-circle")
+            .onClick(() => this.openModal(editor));
+        });
+      })
+    );
+
     this.addSettingTab(new InlineClaudeSettingTab(this.app, this));
+  }
+
+  openModal(editor) {
+    const selection = editor.getSelection();
+    if (!selection) {
+      new obsidian.Notice("Select some text first.");
+      return;
+    }
+    new InlineClaudeModal(
+      this.app,
+      this,
+      selection,
+      editor.getValue(),
+      editor
+    ).open();
   }
 
   async loadSettings() {
