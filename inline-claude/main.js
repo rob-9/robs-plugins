@@ -9,6 +9,8 @@ const VIEW_TYPE = "inline-claude-chat";
 const DEFAULT_SETTINGS = {
   systemPrompt:
     "You are a helpful assistant embedded in an Obsidian note editor. The user will ask questions about selected text from their notes. Be concise. You have full access to their files via Claude Code.",
+  chatHue: "155, 114, 207",
+  selectionHue: "100, 160, 220",
 };
 
 // ─── Claude Code CLI ────────────────────────────────────────────────────────
@@ -31,7 +33,9 @@ function findClaude() {
 }
 
 function callClaudeCode(prompt, sessionId, cwd) {
-  return new Promise((resolve, reject) => {
+  const controller = { proc: null };
+
+  const promise = new Promise((resolve, reject) => {
     const args = [
       "-p", prompt,
       "--output-format", "json",
@@ -47,6 +51,7 @@ function callClaudeCode(prompt, sessionId, cwd) {
       stdio: ["pipe", "pipe", "pipe"],
     });
     proc.stdin.end();
+    controller.proc = proc;
 
     let stdout = "";
     let stderr = "";
@@ -76,6 +81,11 @@ function callClaudeCode(prompt, sessionId, cwd) {
       }
     });
   });
+
+  promise.cancel = () => {
+    if (controller.proc) controller.proc.kill();
+  };
+  return promise;
 }
 
 // ─── Chat View (persistent sidebar) ─────────────────────────────────────────
@@ -103,6 +113,11 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
   async onOpen() {
     this.contentEl.addClass("ic-chat-container");
+    this.render();
+  }
+
+  addStatus(text) {
+    this.messages.push({ role: "status", content: text });
     this.render();
   }
 
@@ -156,6 +171,14 @@ class InlineClaudeChatView extends obsidian.ItemView {
     }
 
     for (const msg of this.messages) {
+      if (msg.role === "status") {
+        messagesEl.createDiv({
+          cls: "ic-chat-status",
+          text: msg.content,
+        });
+        continue;
+      }
+
       const row = messagesEl.createDiv({
         cls: `ic-chat-row ic-chat-${msg.role}`,
       });
@@ -180,7 +203,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
         obsidian.setIcon(copyBtn, "copy");
         copyBtn.addEventListener("click", () => {
           navigator.clipboard.writeText(msg.content);
-          new obsidian.Notice("Copied.");
+          this.addStatus("Copied to clipboard.");
         });
 
         const insertBtn = actions.createEl("button", {
@@ -192,7 +215,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
           const editor =
             this.editor || this.app.workspace.activeEditor?.editor;
           if (!editor) {
-            new obsidian.Notice("No active editor.");
+            this.addStatus("No active editor.");
             return;
           }
           const cursor = editor.getCursor("to");
@@ -201,7 +224,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
             line: cursor.line,
             ch: line.length,
           });
-          new obsidian.Notice("Inserted.");
+          this.addStatus("Inserted below cursor.");
         });
 
         const smartBtn = actions.createEl("button", {
@@ -212,11 +235,12 @@ class InlineClaudeChatView extends obsidian.ItemView {
         smartBtn.addEventListener("click", async () => {
           const file = this.app.workspace.getActiveFile();
           if (!file) {
-            new obsidian.Notice("No active file.");
+            this.addStatus("No active file.");
             return;
           }
           const filePath = file.path;
-          new obsidian.Notice("Adding to " + filePath + "…");
+          this.messages.push({ role: "assistant", content: "Adding to file…" });
+          this.render();
 
           try {
             const cwd = this.app.vault.adapter.basePath;
@@ -227,9 +251,11 @@ class InlineClaudeChatView extends obsidian.ItemView {
               "Just integrate this new content where it fits best:\n\n" +
               msg.content;
             await callClaudeCode(prompt, this.sessionId, cwd);
-            new obsidian.Notice("Added to " + filePath);
+            this.messages.push({ role: "assistant", content: "Added to file." });
+            this.render();
           } catch (err) {
-            new obsidian.Notice("Failed: " + err.message);
+            this.messages.push({ role: "assistant", content: "**Failed:** " + err.message });
+            this.render();
           }
         });
       } else {
@@ -237,7 +263,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
       }
     }
 
-    // Loading
+    // Loading + cancel
     if (this.isLoading) {
       const row = messagesEl.createDiv({
         cls: "ic-chat-row ic-chat-assistant",
@@ -247,6 +273,19 @@ class InlineClaudeChatView extends obsidian.ItemView {
       });
       bubble.createEl("span", { cls: "ic-spinner" });
       bubble.createEl("span", { text: " Thinking…" });
+      const cancelBtn = bubble.createEl("button", {
+        cls: "ic-chat-cancel-btn",
+        text: "Cancel",
+      });
+      cancelBtn.addEventListener("click", () => {
+        if (this.activeRequest) {
+          this.activeRequest.cancel();
+          this.activeRequest = null;
+        }
+        this.isLoading = false;
+        this.messages.push({ role: "status", content: "Cancelled." });
+        this.render();
+      });
     }
 
     // Input area
@@ -306,7 +345,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
     try {
       const cwd = this.app.vault.adapter.basePath;
-      const result = await callClaudeCode(prompt, this.sessionId, cwd);
+      this.activeRequest = callClaudeCode(prompt, this.sessionId, cwd);
+      const result = await this.activeRequest;
 
       // Store session ID for follow-ups
       if (result.sessionId) {
@@ -320,6 +360,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
         content: `**Error:** ${err.message}`,
       });
     } finally {
+      this.activeRequest = null;
       this.isLoading = false;
       this.render();
     }
@@ -329,8 +370,15 @@ class InlineClaudeChatView extends obsidian.ItemView {
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 
 class InlineClaudePlugin extends obsidian.Plugin {
+  applyHues() {
+    const root = document.documentElement;
+    root.style.setProperty("--ic-chat-hue", this.settings.chatHue);
+    root.style.setProperty("--ic-sel-hue", this.settings.selectionHue);
+  }
+
   async onload() {
     await this.loadSettings();
+    this.applyHues();
 
     this.registerView(
       VIEW_TYPE,
@@ -476,6 +524,34 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
           .onChange(async (v) => {
             this.plugin.settings.systemPrompt = v;
             await this.plugin.saveSettings();
+          })
+      );
+
+    new obsidian.Setting(containerEl)
+      .setName("Chat hue")
+      .setDesc("RGB values for chat bubbles, buttons, spinner (e.g. 155, 114, 207)")
+      .addText((t) =>
+        t
+          .setPlaceholder("155, 114, 207")
+          .setValue(this.plugin.settings.chatHue)
+          .onChange(async (v) => {
+            this.plugin.settings.chatHue = v.trim();
+            await this.plugin.saveSettings();
+            this.plugin.applyHues();
+          })
+      );
+
+    new obsidian.Setting(containerEl)
+      .setName("Selection hue")
+      .setDesc("RGB values for selected text section (e.g. 100, 160, 220)")
+      .addText((t) =>
+        t
+          .setPlaceholder("100, 160, 220")
+          .setValue(this.plugin.settings.selectionHue)
+          .onChange(async (v) => {
+            this.plugin.settings.selectionHue = v.trim();
+            await this.plugin.saveSettings();
+            this.plugin.applyHues();
           })
       );
   }
