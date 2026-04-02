@@ -44,6 +44,38 @@
   background: var(--background-primary);
 }
 
+/* Header bar */
+.ic-chat-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+
+.ic-chat-new-session-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid rgba(var(--ic-chat-hue), 0.2);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(var(--ic-chat-hue), 0.7);
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.ic-chat-new-session-btn:hover {
+  background: rgba(var(--ic-chat-hue), 0.12);
+  color: rgba(var(--ic-chat-hue), 1);
+}
+
+.ic-chat-new-session-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* Selection display */
 .ic-chat-selection {
   position: relative;

@@ -49,7 +49,7 @@ function formatToolUse(name, input) {
   }
 }
 
-function callClaudeCode(prompt, sessionId, cwd, onStream, onToolUse) {
+function callClaudeCode(prompt, sessionId, cwd, onStream, onToolUse, systemPrompt) {
   const controller = { proc: null };
 
   const promise = new Promise((resolve, reject) => {
@@ -61,6 +61,9 @@ function callClaudeCode(prompt, sessionId, cwd, onStream, onToolUse) {
     ];
     if (sessionId) {
       args.push("--resume", sessionId);
+    }
+    if (systemPrompt) {
+      args.push("--system-prompt", systemPrompt);
     }
 
     const claudePath = findClaude();
@@ -155,7 +158,6 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.messages = [];
     this.selectionText = "";
     this.docText = "";
-    this.sessionId = null;
     this.isLoading = false;
   }
 
@@ -188,13 +190,34 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.docText = doc;
     this.editor = editor;
     this.messages = [];
-    this.sessionId = null;
     this.render();
   }
 
   render() {
     const container = this.contentEl;
     container.empty();
+
+    // Header bar with New Session button
+    const headerBar = container.createDiv({ cls: "ic-chat-header" });
+    const newBtn = headerBar.createEl("button", {
+      cls: "ic-chat-new-session-btn",
+      attr: { "aria-label": "New session" },
+    });
+    obsidian.setIcon(newBtn, "rotate-ccw");
+    newBtn.createEl("span", { text: " New session" });
+    newBtn.addEventListener("click", () => {
+      if (this.activeRequest) {
+        this.activeRequest.cancel();
+        this.activeRequest = null;
+      }
+      this.isLoading = false;
+      this.plugin.sessionId = null;
+      this.plugin.saveSettings();
+      this.messages = [];
+      this.selectionText = "";
+      this.docText = "";
+      this.render();
+    });
 
     // Selection display
     if (this.selectionText) {
@@ -341,7 +364,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
               "style and formatting. Do not remove or change existing content. " +
               "Just integrate this new content where it fits best:\n\n" +
               msg.content;
-            await callClaudeCode(prompt, this.sessionId, cwd);
+            await callClaudeCode(prompt, this.plugin.sessionId, cwd);
             this.messages.push({ role: "assistant", content: "Added to file." });
             this.render();
           } catch (err) {
@@ -437,7 +460,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
       this.activeRequest = callClaudeCode(
         prompt,
-        this.sessionId,
+        this.plugin.sessionId,
         cwd,
         (text) => {
           accumulated = text;
@@ -451,7 +474,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
           if (!streamMsg.content) {
             this.renderStreamBubble(null, activity);
           }
-        }
+        },
+        isFirst ? this.plugin.settings.systemPrompt : undefined
       );
 
       const result = await this.activeRequest;
@@ -461,7 +485,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
       streamMsg.streaming = false;
 
       if (result.sessionId) {
-        this.sessionId = result.sessionId;
+        this.plugin.sessionId = result.sessionId;
+        this.plugin.saveSettings();
       }
     } catch (err) {
       streamMsg.content = `**Error:** ${err.message}`;
@@ -599,11 +624,13 @@ class InlineClaudePlugin extends obsidian.Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    const data = (await this.loadData()) || {};
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+    this.sessionId = data.sessionId || null;
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    await this.saveData({ ...this.settings, sessionId: this.sessionId });
   }
 }
 
