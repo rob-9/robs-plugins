@@ -11,4 +11,5 @@ obsidian plugins mainly for coding workflows
 | [daily-research](./daily-research) | Fetches trending stories from HackerNews and Google News, uses Claude to pick the top story, and appends a daily brief to your note |
 | [dataview-lite](./dataview-lite) | Simple query language for notes, a beginner-friendly alternative to Dataview |
 | [terminal](./terminal) | Integrates terminals into Obsidian with tmux auto-attach support |
-| [inline-claude](./inline-claude) | Highlight text, ask Claude a question about it via the CLI, and see the response in a sidebar panel |
+| [inline-claude](./inline-claude) | Highlight text, ask Claude about it in a persistent chat panel with copy/insert/replace actions |
+| [hot-reload](./hot-reload) | Automatically reloads plugins when their files change on disk |

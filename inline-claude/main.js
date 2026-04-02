@@ -1,4 +1,6 @@
 const obsidian = require("obsidian");
+const { spawn } = require("child_process");
+const path = require("path");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -6,33 +8,74 @@ const VIEW_TYPE = "inline-claude-chat";
 
 const DEFAULT_SETTINGS = {
   systemPrompt:
-    "You are a helpful assistant embedded in an Obsidian note editor. Answer questions about the user's selected text using the surrounding document for context. Be concise.",
-  apiKey: "",
-  model: "claude-sonnet-4-6",
+    "You are a helpful assistant embedded in an Obsidian note editor. The user will ask questions about selected text from their notes. Be concise. You have full access to their files via Claude Code.",
 };
 
-// ─── Anthropic API ───────────────────────────────────────────────────────────
+// ─── Claude Code CLI ────────────────────────────────────────────────────────
 
-async function callClaude(apiKey, model, system, messages) {
-  const res = await obsidian.requestUrl({
-    url: "https://api.anthropic.com/v1/messages",
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 2048,
-      system,
-      messages,
-    }),
-  });
-  if (res.status !== 200) {
-    throw new Error(`Claude API ${res.status}: ${JSON.stringify(res.json)}`);
+const CLAUDE_PATHS = [
+  path.join(process.env.HOME || "", ".local", "bin", "claude"),
+  "/usr/local/bin/claude",
+  "/opt/homebrew/bin/claude",
+];
+
+function findClaude() {
+  const fs = require("fs");
+  for (const p of CLAUDE_PATHS) {
+    try {
+      fs.accessSync(p, fs.constants.X_OK);
+      return p;
+    } catch {}
   }
-  return res.json.content[0].text;
+  return "claude"; // fallback, hope it's in PATH
+}
+
+function callClaudeCode(prompt, sessionId, cwd) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-p", prompt,
+      "--output-format", "json",
+      "--dangerously-skip-permissions",
+    ];
+    if (sessionId) {
+      args.push("--resume", sessionId);
+    }
+
+    const claudePath = findClaude();
+    const proc = spawn(claudePath, args, {
+      cwd,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    proc.stdin.end();
+
+    let stdout = "";
+    let stderr = "";
+
+    proc.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    proc.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    proc.on("error", (err) => reject(err));
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr || `Claude Code exited with code ${code}`));
+        return;
+      }
+      try {
+        const result = JSON.parse(stdout);
+        resolve({
+          text: result.result || stdout.trim(),
+          sessionId: result.session_id || null,
+        });
+      } catch {
+        resolve({ text: stdout.trim(), sessionId: null });
+      }
+    });
+  });
 }
 
 // ─── Chat View (persistent sidebar) ─────────────────────────────────────────
@@ -42,9 +85,9 @@ class InlineClaudeChatView extends obsidian.ItemView {
     super(leaf);
     this.plugin = plugin;
     this.messages = [];
-    this.systemPrompt = "";
     this.selectionText = "";
     this.docText = "";
+    this.sessionId = null;
     this.isLoading = false;
   }
 
@@ -67,11 +110,12 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.contentEl.empty();
   }
 
-  setContext(selection, doc) {
-    this.systemPrompt = this.plugin.settings.systemPrompt;
+  setContext(selection, doc, editor) {
     this.selectionText = selection;
     this.docText = doc;
+    this.editor = editor;
     this.messages = [];
+    this.sessionId = null;
     this.render();
   }
 
@@ -125,6 +169,69 @@ class InlineClaudeChatView extends obsidian.ItemView {
           "",
           this.plugin
         );
+
+        // Action buttons
+        const actions = row.createDiv({ cls: "ic-chat-actions" });
+
+        const copyBtn = actions.createEl("button", {
+          cls: "ic-chat-action-btn",
+          attr: { "aria-label": "Copy" },
+        });
+        obsidian.setIcon(copyBtn, "copy");
+        copyBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText(msg.content);
+          new obsidian.Notice("Copied.");
+        });
+
+        const insertBtn = actions.createEl("button", {
+          cls: "ic-chat-action-btn",
+          attr: { "aria-label": "Insert below" },
+        });
+        obsidian.setIcon(insertBtn, "arrow-down-to-line");
+        insertBtn.addEventListener("click", () => {
+          const editor =
+            this.editor || this.app.workspace.activeEditor?.editor;
+          if (!editor) {
+            new obsidian.Notice("No active editor.");
+            return;
+          }
+          const cursor = editor.getCursor("to");
+          const line = editor.getLine(cursor.line);
+          editor.replaceRange("\n\n" + msg.content, {
+            line: cursor.line,
+            ch: line.length,
+          });
+          new obsidian.Notice("Inserted.");
+        });
+
+        const smartBtn = actions.createEl("button", {
+          cls: "ic-chat-action-btn",
+          attr: { "aria-label": "Smart add to file" },
+        });
+        obsidian.setIcon(smartBtn, "wand");
+        smartBtn.addEventListener("click", async () => {
+          const file = this.app.workspace.getActiveFile();
+          if (!file) {
+            new obsidian.Notice("No active file.");
+            return;
+          }
+          const filePath = file.path;
+          new obsidian.Notice("Adding to " + filePath + "…");
+
+          try {
+            const cwd = this.app.vault.adapter.basePath;
+            const prompt =
+              "Add the following content to the file `" + filePath + "` " +
+              "in the most appropriate location. Match the file's existing " +
+              "style and formatting. Do not remove or change existing content. " +
+              "Just integrate this new content where it fits best:\n\n" +
+              msg.content;
+            await callClaudeCode(prompt, this.sessionId, cwd);
+            new obsidian.Notice("Added to " + filePath);
+          } catch (err) {
+            new obsidian.Notice("Failed: " + err.message);
+          }
+        });
       } else {
         bubble.innerText = msg.display || msg.content;
       }
@@ -148,14 +255,16 @@ class InlineClaudeChatView extends obsidian.ItemView {
     const textarea = inputWrap.createEl("textarea", {
       cls: "ic-chat-input",
       attr: {
-        placeholder: this.messages.length === 0
-          ? "Ask a question…"
-          : "Follow up…",
+        placeholder:
+          this.messages.length === 0 ? "Ask a question…" : "Follow up…",
         rows: 1,
       },
     });
 
-    if (this.isLoading) textarea.disabled = true;
+    if (this.isLoading) {
+      textarea.disabled = true;
+      inputWrap.addClass("is-disabled");
+    }
 
     // Auto-resize
     textarea.addEventListener("input", () => {
@@ -180,9 +289,9 @@ class InlineClaudeChatView extends obsidian.ItemView {
   async sendMessage(text) {
     if (!text || this.isLoading) return;
 
-    // First message includes full document/selection context for the API
+    // First message includes selection context for display
     const isFirst = this.messages.length === 0;
-    const content = isFirst && this.docText
+    const prompt = isFirst && this.docText
       ? "## Document Context\n" +
         this.docText +
         "\n\n## Selected Text\n" +
@@ -191,28 +300,20 @@ class InlineClaudeChatView extends obsidian.ItemView {
         text
       : text;
 
-    this.messages.push({ role: "user", content, display: text });
+    this.messages.push({ role: "user", content: prompt, display: text });
     this.isLoading = true;
     this.render();
 
     try {
-      const apiKey = this.plugin.getApiKey();
-      if (!apiKey) throw new Error("No API key configured.");
+      const cwd = this.app.vault.adapter.basePath;
+      const result = await callClaudeCode(prompt, this.sessionId, cwd);
 
-      // Build clean messages for API (strip display field)
-      const apiMessages = this.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Store session ID for follow-ups
+      if (result.sessionId) {
+        this.sessionId = result.sessionId;
+      }
 
-      const response = await callClaude(
-        apiKey,
-        this.plugin.settings.model,
-        this.systemPrompt,
-        apiMessages
-      );
-
-      this.messages.push({ role: "assistant", content: response.trim() });
+      this.messages.push({ role: "assistant", content: result.text });
     } catch (err) {
       this.messages.push({
         role: "assistant",
@@ -245,7 +346,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
           new obsidian.Notice("Select some text first.");
           return;
         }
-        this.openChat(sel, editor.getValue());
+        this.openChat(sel, editor.getValue(), editor);
       },
     });
 
@@ -263,13 +364,12 @@ class InlineClaudePlugin extends obsidian.Plugin {
       const editor = this.app.workspace.activeEditor?.editor;
       if (editor) {
         const sel = editor.getSelection();
-        if (sel) this.openChat(sel, editor.getValue());
+        if (sel) this.openChat(sel, editor.getValue(), editor);
       }
     });
 
     // Show tooltip on mouseup when there's a selection
     this.registerDomEvent(document, "mouseup", (e) => {
-      // Ignore clicks on the tooltip itself
       if (this.tooltipEl.contains(e.target)) return;
 
       setTimeout(() => {
@@ -303,16 +403,16 @@ class InlineClaudePlugin extends obsidian.Plugin {
   showTooltip(x, y) {
     this.tooltipEl.style.display = "block";
     this.tooltipEl.style.left = x + "px";
-    this.tooltipEl.style.top = (y - 40) + "px";
+    this.tooltipEl.style.top = y - 40 + "px";
 
-    // Keep it on screen
     requestAnimationFrame(() => {
       const rect = this.tooltipEl.getBoundingClientRect();
       if (rect.right > window.innerWidth) {
-        this.tooltipEl.style.left = (window.innerWidth - rect.width - 8) + "px";
+        this.tooltipEl.style.left =
+          window.innerWidth - rect.width - 8 + "px";
       }
       if (rect.top < 0) {
-        this.tooltipEl.style.top = (y + 20) + "px";
+        this.tooltipEl.style.top = y + 20 + "px";
       }
     });
   }
@@ -326,7 +426,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
     this.tooltipEl?.remove();
   }
 
-  async openChat(selection, doc) {
+  async openChat(selection, doc, editor) {
     let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
     if (!leaf) {
       leaf = this.app.workspace.getRightLeaf(false);
@@ -338,15 +438,9 @@ class InlineClaudePlugin extends obsidian.Plugin {
       this.app.workspace.revealLeaf(leaf);
       const view = leaf.view;
       if (view instanceof InlineClaudeChatView) {
-        view.setContext(selection, doc);
+        view.setContext(selection, doc, editor);
       }
     }
-  }
-
-  getApiKey() {
-    if (this.settings.apiKey) return this.settings.apiKey;
-    const dr = this.app.plugins?.plugins?.["daily-research"];
-    return dr?.settings?.apiKey || "";
   }
 
   async loadSettings() {
@@ -373,36 +467,8 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
     containerEl.createEl("h2", { text: "Inline Claude" });
 
     new obsidian.Setting(containerEl)
-      .setName("Anthropic API key")
-      .setDesc("Leave blank to use daily-research plugin's key")
-      .addText((text) =>
-        text
-          .setPlaceholder("sk-ant-… (or leave blank)")
-          .setValue(this.plugin.settings.apiKey)
-          .onChange(async (v) => {
-            this.plugin.settings.apiKey = v.trim();
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new obsidian.Setting(containerEl)
-      .setName("Model")
-      .setDesc("Claude model to use for responses")
-      .addDropdown((d) =>
-        d
-          .addOption("claude-sonnet-4-6", "Sonnet 4.6")
-          .addOption("claude-haiku-4-5-20251001", "Haiku 4.5 (faster)")
-          .addOption("claude-opus-4-6", "Opus 4.6 (best)")
-          .setValue(this.plugin.settings.model)
-          .onChange(async (v) => {
-            this.plugin.settings.model = v;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new obsidian.Setting(containerEl)
       .setName("System prompt")
-      .setDesc("Instructions sent to Claude with every query")
+      .setDesc("Instructions included with the first message to Claude Code")
       .addTextArea((t) =>
         t
           .setPlaceholder("You are a helpful assistant...")
