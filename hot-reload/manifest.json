@@ -1,0 +1,9 @@
+{
+  "id": "hot-reload",
+  "name": "Hot Reload",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Automatically reloads plugins when their files change on disk.",
+  "author": "Robert",
+  "isDesktopOnly": true
+}
