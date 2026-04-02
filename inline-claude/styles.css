@@ -1,81 +1,150 @@
-.inline-claude-panel {
-  padding: 12px;
+/* ─── Modal ─────────────────────────────────────────────────────────────── */
+
+.inline-claude-modal {
+  padding: 0;
 }
 
-.inline-claude-panel h4 {
-  margin: 0 0 12px 0;
+.modal:has(.inline-claude-modal) {
+  max-width: 560px;
+  width: 90vw;
 }
 
-.inline-claude-selection {
+.modal:has(.inline-claude-modal) .modal-title {
+  display: none;
+}
+
+/* ─── Sections ─────────────────────────────────────────────────────────── */
+
+.ic-section {
+  margin-bottom: 14px;
+}
+
+.ic-label {
+  display: block;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+/* ─── Selection preview ────────────────────────────────────────────────── */
+
+.ic-selection {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  padding: 8px 10px;
-  max-height: 150px;
+  padding: 10px 12px;
+  max-height: 120px;
   overflow-y: auto;
   font-size: 0.85em;
+  line-height: 1.5;
   white-space: pre-wrap;
-  margin-bottom: 12px;
   color: var(--text-muted);
 }
 
-.inline-claude-input {
+/* ─── Input ────────────────────────────────────────────────────────────── */
+
+.ic-input {
   width: 100%;
-  min-height: 70px;
+  min-height: 56px;
   resize: vertical;
-  margin-bottom: 8px;
-  padding: 8px;
+  padding: 10px 12px;
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
   background: var(--background-primary);
   color: var(--text-normal);
   font-family: inherit;
   font-size: 0.9em;
+  line-height: 1.5;
+  transition: border-color 0.15s ease;
 }
 
-.inline-claude-input:focus {
+.ic-input:focus {
   outline: none;
   border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.15);
 }
 
-.inline-claude-submit {
-  width: 100%;
-  padding: 6px 12px;
-  margin-bottom: 12px;
-  cursor: pointer;
+.ic-input:disabled {
+  opacity: 0.5;
 }
 
-.inline-claude-loading {
+/* ─── Loading ──────────────────────────────────────────────────────────── */
+
+.ic-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: var(--text-muted);
-  font-style: italic;
-  padding: 8px 0;
+  font-size: 0.85em;
+  padding: 12px 0;
 }
 
-.inline-claude-response {
+.ic-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--background-modifier-border);
+  border-top-color: var(--interactive-accent);
+  border-radius: 50%;
+  animation: ic-spin 0.6s linear infinite;
+}
+
+@keyframes ic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Response ─────────────────────────────────────────────────────────── */
+
+.ic-response {
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
   overflow-x: auto;
-}
-
-.inline-claude-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.inline-claude-actions button {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 8px;
-  font-size: 0.85em;
-  cursor: pointer;
-}
-
-.inline-claude-error {
-  color: var(--text-error);
-  padding: 8px 0;
   font-size: 0.9em;
+  line-height: 1.6;
+}
+
+.ic-response p:first-child {
+  margin-top: 0;
+}
+
+.ic-response p:last-child {
+  margin-bottom: 0;
+}
+
+/* ─── Action buttons ───────────────────────────────────────────────────── */
+
+.ic-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ic-btn {
+  padding: 6px 16px;
+  font-size: 0.85em;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  transition: background 0.15s ease;
+}
+
+.ic-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* ─── Error ────────────────────────────────────────────────────────────── */
+
+.ic-error {
+  color: var(--text-error);
+  font-size: 0.85em;
+  padding: 4px 0;
 }

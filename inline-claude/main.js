@@ -1,19 +1,22 @@
 const obsidian = require("obsidian");
 const { spawn } = require("child_process");
+const path = require("path");
+const os = require("os");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const VIEW_TYPE = "inline-claude-panel";
 
 const DEFAULT_SETTINGS = {
   systemPrompt:
     "You are a helpful assistant embedded in an Obsidian note editor. Answer questions about the user's selected text using the surrounding document for context. Be concise.",
+  claudePath: path.join(os.homedir(), ".local", "bin", "claude"),
 };
 
 // ─── Claude CLI Helper ───────────────────────────────────────────────────────
 
-function askClaude(prompt) {
-  const proc = spawn("claude", ["-p"]);
+function askClaude(claudePath, prompt) {
+  const proc = spawn(claudePath, ["-p"], {
+    env: { ...process.env, PATH: process.env.PATH + ":/usr/local/bin:/opt/homebrew/bin" },
+  });
   let out = "",
     err = "";
   proc.stdout.on("data", (d) => (out += d));
@@ -32,123 +35,69 @@ function askClaude(prompt) {
   return promise;
 }
 
-// ─── Sidebar View ─────────────────────────────────────────────────────────────
+// ─── Modal ───────────────────────────────────────────────────────────────────
 
-class InlineClaudeView extends obsidian.ItemView {
-  constructor(leaf, plugin) {
-    super(leaf);
+class InlineClaudeModal extends obsidian.Modal {
+  constructor(app, plugin, selection, document, editor) {
+    super(app);
     this.plugin = plugin;
-    this.selection = "";
-    this.document = "";
-    this.editor = null;
+    this.selection = selection;
+    this.document = document;
+    this.editor = editor;
     this.lastResponse = "";
     this._activeProc = null;
   }
 
-  getViewType() {
-    return VIEW_TYPE;
-  }
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.addClass("inline-claude-modal");
 
-  getDisplayText() {
-    return "Ask Claude";
-  }
+    // Selection preview
+    const selSection = contentEl.createDiv({ cls: "ic-section" });
+    selSection.createEl("label", { text: "Selected text", cls: "ic-label" });
+    const selBox = selSection.createDiv({ cls: "ic-selection" });
+    selBox.textContent =
+      this.selection.length > 500
+        ? this.selection.slice(0, 500) + "…"
+        : this.selection;
 
-  getIcon() {
-    return "message-circle";
-  }
-
-  async onOpen() {
-    this.contentEl.addClass("inline-claude-panel");
-    this.renderPanel();
-  }
-
-  async onClose() {
-    if (this._activeProc) this._activeProc.kill();
-    this.contentEl.empty();
-  }
-
-  setContext(selection, document, editor) {
-    this.selection = selection;
-    this.document = document;
-    this.editor = editor;
-    this.renderPanel();
-  }
-
-  renderPanel() {
-    const container = this.contentEl;
-    container.empty();
-    this.lastResponse = "";
-
-    // Header
-    container.createEl("h4", { text: "Ask Claude" });
-
-    if (!this.selection) {
-      container.createDiv({
-        cls: "inline-claude-selection",
-        text: "Select some text and run the command to get started.",
-      });
-      return;
-    }
-
-    // Selected text preview
-    const selLabel = container.createDiv({
-      text: "Selected text",
-      cls: "setting-item-description",
-    });
-    selLabel.style.marginBottom = "4px";
-    const selBox = container.createDiv({ cls: "inline-claude-selection" });
-    selBox.textContent = this.selection;
-
-    // Question textarea
-    const textarea = container.createEl("textarea", {
-      cls: "inline-claude-input",
-      attr: { placeholder: "Ask a question about this text...", rows: 3 },
+    // Question input
+    const inputSection = contentEl.createDiv({ cls: "ic-section" });
+    const textarea = inputSection.createEl("textarea", {
+      cls: "ic-input",
+      attr: { placeholder: "Ask a question about this text…", rows: 2 },
     });
 
-    // Ask button
-    const askBtn = container.createEl("button", {
-      cls: "inline-claude-submit",
-      text: "Ask",
-    });
+    // Loading
+    const loadingEl = contentEl.createDiv({ cls: "ic-loading" });
+    loadingEl.style.display = "none";
+    const spinner = loadingEl.createSpan({ cls: "ic-spinner" });
+    loadingEl.createSpan({ text: "Thinking…" });
 
-    // Response area (hidden initially)
-    const responseEl = container.createDiv({ cls: "inline-claude-response" });
+    // Response
+    const responseEl = contentEl.createDiv({ cls: "ic-response" });
     responseEl.style.display = "none";
 
-    // Action buttons (hidden initially)
-    const actionsEl = container.createDiv({ cls: "inline-claude-actions" });
+    // Actions
+    const actionsEl = contentEl.createDiv({ cls: "ic-actions" });
     actionsEl.style.display = "none";
 
-    // Loading indicator
-    const loadingEl = container.createDiv({ cls: "inline-claude-loading" });
-    loadingEl.style.display = "none";
-    loadingEl.textContent = "Thinking...";
-
-    // Enter to submit, Shift+Enter for newline
-    textarea.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        askBtn.click();
-      }
-    });
-
-    const submitQuestion = async () => {
+    // Submit handler
+    const submit = async () => {
       const question = textarea.value.trim();
       if (!question) return;
 
-      askBtn.disabled = true;
       textarea.disabled = true;
-      loadingEl.style.display = "block";
+      loadingEl.style.display = "flex";
       responseEl.style.display = "none";
       actionsEl.style.display = "none";
 
       const prompt = this.buildPrompt(question);
 
-      // Kill any in-flight request
       if (this._activeProc) this._activeProc.kill();
 
       try {
-        const request = askClaude(prompt);
+        const request = askClaude(this.plugin.settings.claudePath, prompt);
         this._activeProc = request.proc;
         const response = await request;
         this.lastResponse = response.trim();
@@ -169,22 +118,32 @@ class InlineClaudeView extends obsidian.ItemView {
         responseEl.style.display = "block";
         responseEl.empty();
         responseEl.createDiv({
-          cls: "inline-claude-error",
-          text: "Error: " + err.message,
+          cls: "ic-error",
+          text: err.message,
         });
       } finally {
         this._activeProc = null;
         loadingEl.style.display = "none";
-        askBtn.disabled = false;
         textarea.disabled = false;
         textarea.focus();
       }
     };
 
-    askBtn.addEventListener("click", submitQuestion);
+    // Enter to submit
+    textarea.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submit();
+      }
+    });
 
-    // Focus textarea on open
+    // Focus
     requestAnimationFrame(() => textarea.focus());
+  }
+
+  onClose() {
+    if (this._activeProc) this._activeProc.kill();
+    this.contentEl.empty();
   }
 
   buildPrompt(question) {
@@ -203,29 +162,37 @@ class InlineClaudeView extends obsidian.ItemView {
   renderActions(container) {
     container.empty();
 
-    // Insert Below
-    const insertBtn = container.createEl("button", { text: "Insert Below" });
+    const insertBtn = container.createEl("button", {
+      text: "Insert below",
+      cls: "ic-btn",
+    });
     insertBtn.addEventListener("click", () => {
       if (!this.editor || !this.lastResponse) return;
       const cursor = this.editor.getCursor("to");
       const line = this.editor.getLine(cursor.line);
-      this.editor.replaceRange(
-        "\n\n" + this.lastResponse,
-        { line: cursor.line, ch: line.length }
-      );
+      this.editor.replaceRange("\n\n" + this.lastResponse, {
+        line: cursor.line,
+        ch: line.length,
+      });
       new obsidian.Notice("Inserted below selection.");
+      this.close();
     });
 
-    // Replace Selection
-    const replaceBtn = container.createEl("button", { text: "Replace" });
+    const replaceBtn = container.createEl("button", {
+      text: "Replace",
+      cls: "ic-btn",
+    });
     replaceBtn.addEventListener("click", () => {
       if (!this.editor || !this.lastResponse) return;
       this.editor.replaceSelection(this.lastResponse);
       new obsidian.Notice("Selection replaced.");
+      this.close();
     });
 
-    // Copy
-    const copyBtn = container.createEl("button", { text: "Copy" });
+    const copyBtn = container.createEl("button", {
+      text: "Copy",
+      cls: "ic-btn",
+    });
     copyBtn.addEventListener("click", () => {
       if (!this.lastResponse) return;
       navigator.clipboard.writeText(this.lastResponse);
@@ -240,12 +207,6 @@ class InlineClaudePlugin extends obsidian.Plugin {
   async onload() {
     await this.loadSettings();
 
-    this.registerView(VIEW_TYPE, (leaf) => new InlineClaudeView(leaf, this));
-
-    this.addRibbonIcon("message-circle", "Ask Claude about selection", () => {
-      this.activateFromActiveEditor();
-    });
-
     this.addCommand({
       id: "ask-claude-about-selection",
       name: "Ask Claude about selection",
@@ -255,16 +216,17 @@ class InlineClaudePlugin extends obsidian.Plugin {
           new obsidian.Notice("Select some text first.");
           return;
         }
-        const document = editor.getValue();
-        this.revealPanel(selection, document, editor);
+        new InlineClaudeModal(
+          this.app,
+          this,
+          selection,
+          editor.getValue(),
+          editor
+        ).open();
       },
     });
 
     this.addSettingTab(new InlineClaudeSettingTab(this.app, this));
-  }
-
-  onunload() {
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE);
   }
 
   async loadSettings() {
@@ -273,38 +235,6 @@ class InlineClaudePlugin extends obsidian.Plugin {
 
   async saveSettings() {
     await this.saveData(this.settings);
-  }
-
-  activateFromActiveEditor() {
-    const view = this.app.workspace.getActiveViewOfType(obsidian.MarkdownView);
-    if (!view) {
-      new obsidian.Notice("Open a markdown file first.");
-      return;
-    }
-    const editor = view.editor;
-    const selection = editor.getSelection();
-    if (!selection) {
-      new obsidian.Notice("Select some text first.");
-      return;
-    }
-    this.revealPanel(selection, editor.getValue(), editor);
-  }
-
-  async revealPanel(selection, document, editor) {
-    let leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE)[0];
-    if (!leaf) {
-      leaf = this.app.workspace.getRightLeaf(false);
-      if (leaf) {
-        await leaf.setViewState({ type: VIEW_TYPE, active: true });
-      }
-    }
-    if (leaf) {
-      this.app.workspace.revealLeaf(leaf);
-      const view = leaf.view;
-      if (view instanceof InlineClaudeView) {
-        view.setContext(selection, document, editor);
-      }
-    }
   }
 }
 
@@ -331,6 +261,19 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
           .setValue(this.plugin.settings.systemPrompt)
           .onChange(async (value) => {
             this.plugin.settings.systemPrompt = value;
+            await this.plugin.saveSettings();
+          })
+      );
+
+    new obsidian.Setting(containerEl)
+      .setName("Claude CLI path")
+      .setDesc("Full path to the claude binary")
+      .addText((text) =>
+        text
+          .setPlaceholder("/Users/you/.local/bin/claude")
+          .setValue(this.plugin.settings.claudePath)
+          .onChange(async (value) => {
+            this.plugin.settings.claudePath = value.trim();
             await this.plugin.saveSettings();
           })
       );
