@@ -11,8 +11,6 @@ Run the **"Daily Research: Generate"** command from the command palette. The plu
 3. Generate a concise research brief with key takeaways
 4. Append it to today's daily note
 
-The plugin can also run automatically on startup (once per day).
-
 ## Settings
 
 - **Anthropic API key** — your Claude API key
@@ -20,7 +18,6 @@ The plugin can also run automatically on startup (once per day).
 - **Dailies folder** — path to your daily notes folder
 - **Interests** — comma-separated topics used to filter stories and search Google News
 - **HackerNews story count** — number of top stories to fetch (10-50)
-- **Run on startup** — auto-generate when Obsidian opens
 
 The plugin tracks previously covered topics to avoid repetition.
 

@@ -20,8 +20,6 @@ const DEFAULT_SETTINGS = {
   interests:
     "agentic AI, multi-agent systems, MCP, RAG, LLMs, cybersecurity, distributed systems",
   storyCount: 30,
-  runOnStartup: false,
-  lastRunDate: "",
   topicHistory: [],
 };
 
@@ -233,17 +231,6 @@ class DailyResearchPlugin extends Plugin {
     });
 
     this.addSettingTab(new DailyResearchSettingTab(this.app, this));
-
-    if (this.settings.runOnStartup) {
-      const today = localToday();
-      if (this.settings.lastRunDate !== today) {
-        this.registerInterval(
-          window.setTimeout(async () => {
-            await this.runResearch();
-          }, 5000)
-        );
-      }
-    }
   }
 
   async loadSettings() {
@@ -278,9 +265,6 @@ class DailyResearchPlugin extends Plugin {
     }
 
     this._running = true;
-    // Persist lastRunDate immediately to prevent duplicate startup triggers
-    this.settings.lastRunDate = today;
-    await this.saveSettings();
 
     new Notice("Daily Research: Fetching from HackerNews + Google News…");
 
@@ -436,20 +420,6 @@ class DailyResearchSettingTab extends PluginSettingTab {
           .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.storyCount = value;
-            await this.plugin.saveSettings();
-          })
-      );
-
-    new Setting(containerEl)
-      .setName("Run on startup")
-      .setDesc(
-        "Automatically generate research when Obsidian opens (once per day)"
-      )
-      .addToggle((toggle) =>
-        toggle
-          .setValue(this.plugin.settings.runOnStartup)
-          .onChange(async (value) => {
-            this.plugin.settings.runOnStartup = value;
             await this.plugin.saveSettings();
           })
       );
