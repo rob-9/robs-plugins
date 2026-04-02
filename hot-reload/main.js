@@ -28,7 +28,7 @@ class HotReloadPlugin extends Plugin {
     // Watch each enabled plugin folder (skip ourselves)
     const enabled = this.app.plugins.enabledPlugins;
     for (const id of enabled) {
-      if (id === this.manifest.id) continue;
+      if (id === this.manifest?.id) continue;
       this.watchPlugin(pluginsDir, id);
     }
   }
@@ -56,7 +56,7 @@ class HotReloadPlugin extends Plugin {
           pluginId,
           setTimeout(() => {
             this.reloadTimers.delete(pluginId);
-            this.reloadPlugin(pluginId);
+            this.reloadPlugin(pluginId).catch(e => console.error("hot-reload: failed to reload", pluginId, e));
           }, 500)
         );
       });

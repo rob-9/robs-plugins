@@ -90,7 +90,7 @@ function findAnnotationsForBlock(content, block) {
 
   // Search window: 5 lines before the code block, the code block itself, and 5 lines after
   const searchStart = Math.max(0, block.lineStart - 5);
-  const searchEnd = Math.min(lines.length - 1, block.lineEnd + 5);
+  const searchEnd = Math.min(lines.length, block.lineEnd + 5);
 
   const searchRegion = lines.slice(searchStart, searchEnd + 1).join("\n");
 
@@ -99,10 +99,11 @@ function findAnnotationsForBlock(content, block) {
 
   const regions = [searchRegion, codeRegion];
 
+  const regex = /[O\u0398\u03A9]\s*\(\s*([^)]*)\s*\)/g;
   for (const region of regions) {
-    BIGO_REGEX.lastIndex = 0;
+    regex.lastIndex = 0;
     let match;
-    while ((match = BIGO_REGEX.exec(region)) !== null) {
+    while ((match = regex.exec(region)) !== null) {
       const fullMatch = match[0];
       const inner = match[1].trim();
       const surroundingStart = Math.max(0, match.index - 40);
@@ -139,8 +140,8 @@ function findConstraintTables(content) {
     const constraint = match[1].trim();
     const complexity = match[2].trim();
 
-    BIGO_REGEX.lastIndex = 0;
-    const cMatch = BIGO_REGEX.exec(complexity);
+    const regex = /[O\u0398\u03A9]\s*\(\s*([^)]*)\s*\)/g;
+    const cMatch = regex.exec(complexity);
     const inner = cMatch ? cMatch[1].trim() : complexity;
 
     tables.push({ constraint, complexity, inner });
@@ -178,7 +179,7 @@ class ComplexityPanelView extends obsidian.ItemView {
     this.contentEl.empty();
   }
 
-  renderPanel() {
+  async renderPanel() {
     const container = this.contentEl;
     container.empty();
 
@@ -188,11 +189,13 @@ class ComplexityPanelView extends obsidian.ItemView {
       return;
     }
 
-    this.app.vault.cachedRead(activeFile).then((content) => {
+    try {
+      const content = await this.app.vault.cachedRead(activeFile);
+      if (this.app.workspace.getActiveFile() !== activeFile) return;
       this.renderContent(container, content, activeFile.basename);
-    }).catch(() => {
+    } catch {
       container.createDiv({ cls: "complexity-empty", text: "Unable to read note." });
-    });
+    }
   }
 
   renderContent(container, content, filename) {

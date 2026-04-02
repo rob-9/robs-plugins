@@ -42,6 +42,9 @@ async function fetchHNStories(limit) {
   const topRes = await requestUrl({
     url: "https://hacker-news.firebaseio.com/v0/topstories.json",
   });
+  if (!Array.isArray(topRes.json)) {
+    return [];
+  }
   const ids = topRes.json.slice(0, limit);
 
   const stories = [];
@@ -84,6 +87,10 @@ async function fetchGoogleNews(query, limit = 10) {
     const res = await requestUrl({ url });
     const parser = new DOMParser();
     const doc = parser.parseFromString(res.text, "text/xml");
+    if (doc.querySelector("parsererror")) {
+      console.error("Daily Research: Google News XML parse error");
+      return [];
+    }
     const items = doc.querySelectorAll("item");
 
     return Array.from(items)
@@ -147,6 +154,9 @@ async function callClaude(apiKey, model, system, userMsg) {
     throw new Error(
       `Claude API error ${res.status}: ${JSON.stringify(res.json)}`
     );
+  }
+  if (!res.json || !Array.isArray(res.json.content) || !res.json.content[0] || typeof res.json.content[0].text !== "string") {
+    throw new Error("Claude API returned an unexpected response structure: " + JSON.stringify(res.json));
   }
   return res.json.content[0].text;
 }
@@ -233,6 +243,8 @@ class DailyResearchPlugin extends Plugin {
     this.addSettingTab(new DailyResearchSettingTab(this.app, this));
   }
 
+  onunload() {}
+
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
   }
@@ -252,6 +264,8 @@ class DailyResearchPlugin extends Plugin {
       return;
     }
 
+    this._running = true;
+
     const today = localToday();
 
     const dailyPath = `${this.settings.dailiesFolder}/${today}.md`;
@@ -260,11 +274,10 @@ class DailyResearchPlugin extends Plugin {
       const content = await this.app.vault.read(existingFile);
       if (content.includes("Daily Research:")) {
         new Notice("Daily Research: Already generated for today.");
+        this._running = false;
         return;
       }
     }
-
-    this._running = true;
 
     new Notice("Daily Research: Fetching from HackerNews + Google News…");
 
@@ -318,22 +331,27 @@ class DailyResearchPlugin extends Plugin {
         content.trimEnd() + "\n\n" + research + "\n"
       );
     } else {
-      const folder = this.app.vault.getAbstractFileByPath(
-        this.settings.dailiesFolder
-      );
-      if (!folder) {
-        await this.app.vault.createFolder(this.settings.dailiesFolder);
+      try {
+        const folder = this.app.vault.getAbstractFileByPath(
+          this.settings.dailiesFolder
+        );
+        if (!folder) {
+          await this.app.vault.createFolder(this.settings.dailiesFolder);
+        }
+
+        const note =
+          `## ${today}\n` +
+          `[[Daily]]\n\n` +
+          `Ticks\n- [ ] \n\n` +
+          `Goals\n- [ ] \n\n` +
+          research +
+          "\n";
+
+        await this.app.vault.create(dailyPath, note);
+      } catch (err) {
+        new Notice(`Daily Research: Failed to create daily note — ${err.message}`);
+        throw err;
       }
-
-      const note =
-        `## ${today}\n` +
-        `[[Daily]]\n\n` +
-        `Ticks\n- [ ] \n\n` +
-        `Goals\n- [ ] \n\n` +
-        research +
-        "\n";
-
-      await this.app.vault.create(dailyPath, note);
     }
   }
 }

@@ -108,22 +108,25 @@ function scanFileForCards(filePath, content) {
         code: codeBody.trimEnd(),
         answer: blockquoteContent,
       });
-    } else if (CLOZE_REGEX.test(codeBody)) {
-      // Code cloze card
+    } else {
       CLOZE_REGEX.lastIndex = 0;
-      cards.push({
-        id: generateCardId(filePath, codeBody),
-        type: CARD_TYPE.CLOZE,
-        filePath: filePath,
-        lang: lang,
-        code: codeBody.trimEnd(),
-        clozes: [],
-      });
-      // Extract cloze answers
-      let clozeMatch;
-      CLOZE_REGEX.lastIndex = 0;
-      while ((clozeMatch = CLOZE_REGEX.exec(codeBody)) !== null) {
-        cards[cards.length - 1].clozes.push(clozeMatch[1]);
+      if (CLOZE_REGEX.test(codeBody)) {
+        // Code cloze card
+        CLOZE_REGEX.lastIndex = 0;
+        cards.push({
+          id: generateCardId(filePath, codeBody),
+          type: CARD_TYPE.CLOZE,
+          filePath: filePath,
+          lang: lang,
+          code: codeBody.trimEnd(),
+          clozes: [],
+        });
+        // Extract cloze answers
+        let clozeMatch;
+        CLOZE_REGEX.lastIndex = 0;
+        while ((clozeMatch = CLOZE_REGEX.exec(codeBody)) !== null) {
+          cards[cards.length - 1].clozes.push(clozeMatch[1]);
+        }
       }
     }
   }
@@ -186,6 +189,14 @@ class ReviewModal extends obsidian.Modal {
   }
 
   onClose() {
+    if (this._keyHandler) {
+      document.removeEventListener("keydown", this._keyHandler);
+      this._keyHandler = null;
+    }
+    if (this._ratingKeyHandler) {
+      document.removeEventListener("keydown", this._ratingKeyHandler);
+      this._ratingKeyHandler = null;
+    }
     this.contentEl.empty();
   }
 
@@ -326,7 +337,6 @@ class ReviewModal extends obsidian.Modal {
       if (this.answered) return;
       this.answered = true;
 
-      let allCorrect = true;
       inputs.forEach((input) => {
         const expected = input.dataset.answer;
         const given = input.value.trim();
@@ -334,7 +344,6 @@ class ReviewModal extends obsidian.Modal {
           input.classList.add("sr-correct");
         } else {
           input.classList.add("sr-incorrect");
-          allCorrect = false;
           // Show correct answer next to incorrect input
           const correctSpan = document.createElement("span");
           correctSpan.className = "sr-code-cloze-correct-answer";
@@ -379,12 +388,14 @@ class ReviewModal extends obsidian.Modal {
         showBtn.click();
       }
     };
+    this._keyHandler = keyHandler;
     document.addEventListener("keydown", keyHandler);
 
     // Clean up on next render
     const originalRenderCard = this.renderCard.bind(this);
     this.renderCard = () => {
       document.removeEventListener("keydown", keyHandler);
+      this._keyHandler = null;
       this.renderCard = originalRenderCard;
       originalRenderCard();
     };
@@ -423,20 +434,23 @@ class ReviewModal extends obsidian.Modal {
     });
 
     // Keyboard shortcuts: 1-4
-    const keyHandler = (e) => {
+    const ratingKeyHandler = (e) => {
       const num = parseInt(e.key);
       if (num >= 1 && num <= 4) {
         e.preventDefault();
-        document.removeEventListener("keydown", keyHandler);
+        document.removeEventListener("keydown", ratingKeyHandler);
+        this._ratingKeyHandler = null;
         this.rateCard(card, num);
       }
     };
-    document.addEventListener("keydown", keyHandler);
+    this._ratingKeyHandler = ratingKeyHandler;
+    document.addEventListener("keydown", ratingKeyHandler);
 
     // Clean up on next render
     const originalRenderCard = this.renderCard.bind(this);
     this.renderCard = () => {
-      document.removeEventListener("keydown", keyHandler);
+      document.removeEventListener("keydown", ratingKeyHandler);
+      this._ratingKeyHandler = null;
       this.renderCard = originalRenderCard;
       originalRenderCard();
     };

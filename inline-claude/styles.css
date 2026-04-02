@@ -7,6 +7,44 @@
   display: none;
 }
 
+/* ─── Animations ─────────────────────────────────────────────────────── */
+
+@keyframes ic-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ic-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Container entrance — one-time on panel open */
+.ic-chat-container.ic-entering {
+  animation: ic-fade-in 0.35s ease;
+}
+
+/* New messages slide up */
+.ic-chat-row.ic-new {
+  animation: ic-fade-up 0.25s ease both;
+}
+
+.ic-chat-status.ic-new {
+  animation: ic-fade-up 0.25s ease both;
+}
+
+@keyframes ic-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ─── Floating "Ask Claude" tooltip ───────────────────────────────────── */
 
 .ic-selection-tooltip {
@@ -24,7 +62,7 @@
   box-shadow: 0 2px 12px rgba(var(--ic-chat-hue), 0.4);
   pointer-events: auto;
   user-select: none;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
 }
 
 .ic-selection-tooltip:hover {
@@ -51,6 +89,7 @@
   gap: 6px;
   padding: 6px 10px;
   flex-shrink: 0;
+
 }
 
 .ic-session-select {
@@ -73,6 +112,7 @@
   background-position: right 8px center;
   padding-right: 24px;
   text-overflow: ellipsis;
+  transition: border-color 0.2s ease;
 }
 
 .ic-session-select:hover {
@@ -96,12 +136,13 @@
   color: rgba(var(--ic-chat-hue), 0.6);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .ic-chat-header-btn:hover {
   background: rgba(var(--ic-chat-hue), 0.12);
   color: rgba(var(--ic-chat-hue), 1);
+  transform: scale(1.05);
 }
 
 .ic-chat-header-btn svg {
@@ -117,6 +158,7 @@
   flex-shrink: 0;
   background: rgba(var(--ic-sel-hue), 0.06);
   margin-bottom: 20px;
+
 }
 
 /* Vignette fade below selection */
@@ -138,11 +180,6 @@
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.15s ease;
-}
-
-.ic-chat-selection-header:hover {
-  background: rgba(var(--ic-sel-hue), 0.1);
 }
 
 .ic-chat-selection-label {
@@ -156,6 +193,7 @@
 .ic-chat-selection-toggle {
   font-size: 10px;
   color: rgba(var(--ic-sel-hue), 0.8);
+  transition: transform 0.2s ease;
 }
 
 .ic-chat-selection-body {
@@ -171,7 +209,7 @@
   background: rgba(var(--ic-sel-hue), 0.1);
   border: 1px solid rgba(var(--ic-sel-hue), 0.15);
   border-radius: 8px;
-  transition: max-height 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+  transition: max-height 0.25s ease, padding 0.25s ease, margin 0.25s ease, opacity 0.25s ease;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -186,6 +224,7 @@
   padding-bottom: 0;
   margin-bottom: 0;
   overflow: hidden;
+  opacity: 0;
 }
 
 /* Status messages (in-chat notices) */
@@ -199,6 +238,7 @@
   border: 1px solid rgba(var(--ic-chat-hue), 0.12);
   border-radius: 12px;
   max-width: 80%;
+
 }
 
 /* Messages area */
@@ -221,12 +261,14 @@
   font-size: var(--font-ui-small);
   text-align: center;
   padding: 32px 16px;
+
 }
 
 /* Message rows */
 .ic-chat-row {
   display: flex;
   flex-direction: column;
+
 }
 
 .ic-chat-row.ic-chat-user {
@@ -302,12 +344,13 @@
   background: rgba(var(--ic-chat-hue), 0.08);
   color: rgba(var(--ic-chat-hue), 0.5);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.15s ease;
 }
 
 .ic-chat-action-btn:hover {
   background: rgba(var(--ic-chat-hue), 0.2);
   color: rgba(var(--ic-chat-hue), 0.9);
+  transform: scale(1.1);
 }
 
 .ic-chat-action-btn svg {
@@ -324,12 +367,12 @@
   font-size: var(--font-ui-small);
 }
 
-
 /* Input area — rainbow border via wrapper */
 .ic-chat-input-area {
   padding: 10px 14px;
   border-top: 1px solid rgba(var(--ic-chat-hue), 0.12);
   flex-shrink: 0;
+
 }
 
 .ic-chat-input-wrap {
@@ -386,10 +429,4 @@
   border-top-color: rgba(var(--ic-chat-hue), 0.8);
   border-radius: 50%;
   animation: ic-spin 0.6s linear infinite;
-}
-
-@keyframes ic-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }

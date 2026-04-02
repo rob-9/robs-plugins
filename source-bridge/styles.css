@@ -13,16 +13,6 @@
   text-decoration-style: solid;
 }
 
-.source-bridge-link .source-bridge-icon {
-  margin-right: 4px;
-  vertical-align: middle;
-  opacity: 0.6;
-}
-
-.source-bridge-link:hover .source-bridge-icon {
-  opacity: 1;
-}
-
 .source-bridge-container {
   margin: 4px 0;
   border-radius: 8px;
@@ -115,10 +105,6 @@
 
 .source-bridge-stale.is-fresh {
   background: var(--color-green);
-}
-
-.source-bridge-stale.is-stale {
-  background: var(--color-yellow);
 }
 
 .source-bridge-stale.is-missing {

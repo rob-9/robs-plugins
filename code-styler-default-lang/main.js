@@ -38,6 +38,9 @@ var __publicField = (obj, key2, value) => {
   __defNormalProp(obj, typeof key2 !== "symbol" ? key2 + "" : key2, value);
   return value;
 };
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // node_modules/@simonwep/pickr/dist/pickr.min.js
 var require_pickr_min = __commonJS({
@@ -18473,7 +18476,7 @@ async function remakeCodeblocks(codeblockPreElements, codeblocksParameters, sour
     const codeblockParameters = codeblocksParameters[key2];
     const codeblockCodeElement = codeblockPreElement.querySelector("pre > code");
     if (!codeblockCodeElement)
-      return;
+      continue;
     if (Array.from(codeblockCodeElement.classList).some((className) => /^language-\S+/.test(className)))
       while (!codeblockCodeElement.classList.contains("is-loaded"))
         await sleep(2);

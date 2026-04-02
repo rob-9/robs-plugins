@@ -159,13 +159,15 @@ async function loadSessionHistory(cwd, sessionId) {
         }
 
         if (event.type === "assistant" && event.message?.content) {
-          const text = (Array.isArray(event.message.content)
-            ? event.message.content : [event.message.content])
+          const blocks = Array.isArray(event.message.content)
+            ? event.message.content : [event.message.content];
+          const text = blocks
             .filter((b) => b.type === "text")
             .map((b) => b.text)
             .join("");
+          const hasToolUse = blocks.some((b) => b.type === "tool_use");
           if (text) {
-            messages.push({ role: "assistant", content: text });
+            messages.push({ role: "assistant", content: text, toolMessage: hasToolUse });
           }
         }
       } catch {}
@@ -288,6 +290,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.selectionText = "";
     this.docText = "";
     this.isLoading = false;
+    this.activeRequest = null;
     this.discoveredSessions = [];
     this.sessionMessageCache = new Map();
   }
@@ -323,6 +326,10 @@ class InlineClaudeChatView extends obsidian.ItemView {
   }
 
   async onClose() {
+    if (this.activeRequest) {
+      this.activeRequest.cancel();
+      this.activeRequest = null;
+    }
     this.contentEl.empty();
   }
 
@@ -513,6 +520,9 @@ class InlineClaudeChatView extends obsidian.ItemView {
           "",
           this.plugin
         );
+
+        // Skip action buttons for tool-use intermediary messages
+        if (msg.toolMessage) continue;
 
         // Action buttons
         const actions = row.createDiv({ cls: "ic-chat-actions" });
@@ -815,6 +825,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
   onunload() {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE);
     this.tooltipEl?.remove();
+    this.tooltipEl = null;
   }
 
   async openChat(selection, doc, editor) {

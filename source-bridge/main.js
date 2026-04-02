@@ -171,9 +171,13 @@ async function renderPreview(previewEl, parsed, plugin) {
   const lang = detectLanguage(parsed.filePath);
   const codeBlock = "```" + lang + "\n" + result.content + "\n```";
 
-  await obsidian.MarkdownRenderer.render(
-    plugin.app, codeBlock, previewEl, "", plugin
-  );
+  try {
+    await obsidian.MarkdownRenderer.render(
+      plugin.app, codeBlock, previewEl, "", plugin
+    );
+  } catch (e) {
+    previewEl.createDiv({ cls: "source-bridge-error", text: "Failed to render preview" });
+  }
 }
 
 function openFileExternally(filePath, lineStart, plugin) {
@@ -211,9 +215,9 @@ function createReadingModeProcessor(plugin) {
       // Skip if inside a code element
       if (textNode.parentElement && textNode.parentElement.closest("code, pre")) continue;
 
-      PATH_REGEX.lastIndex = 0;
+      const regex = new RegExp(PATH_REGEX.source, PATH_REGEX.flags);
       let match;
-      while ((match = PATH_REGEX.exec(text)) !== null) {
+      while ((match = regex.exec(text)) !== null) {
         const parsed = parsePath(match[1]);
         if (!parsed) continue;
 
@@ -307,9 +311,9 @@ function createEditorExtension(plugin) {
       });
       if (inCodeBlock) continue;
 
-      PATH_REGEX.lastIndex = 0;
+      const regex = new RegExp(PATH_REGEX.source, PATH_REGEX.flags);
       let match;
-      while ((match = PATH_REGEX.exec(text)) !== null) {
+      while ((match = regex.exec(text)) !== null) {
         const parsed = parsePath(match[1]);
         if (!parsed) continue;
 
@@ -343,9 +347,9 @@ function createEditorExtension(plugin) {
       const pos = view.posAtDOM(target);
       const line = view.state.doc.lineAt(pos);
 
-      PATH_REGEX.lastIndex = 0;
+      const regex = new RegExp(PATH_REGEX.source, PATH_REGEX.flags);
       let match;
-      while ((match = PATH_REGEX.exec(line.text)) !== null) {
+      while ((match = regex.exec(line.text)) !== null) {
         const matchFrom = line.from + match.index;
         const matchTo = line.from + match.index + match[1].length;
         if (pos >= matchFrom && pos <= matchTo) {
@@ -433,6 +437,8 @@ class SourceBridgePlugin extends obsidian.Plugin {
 
     this.addSettingTab(new SourceBridgeSettingTab(this.app, this));
   }
+
+  onunload() {}
 
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());

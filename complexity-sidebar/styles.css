@@ -167,18 +167,3 @@
   font-size: 0.85em;
   color: var(--text-normal);
 }
-
-/* Mismatch / warning styles */
-.complexity-warning {
-  background: rgba(244, 67, 54, 0.1);
-  border: 1px solid rgba(244, 67, 54, 0.3);
-  border-radius: 6px;
-  padding: 8px 12px;
-  margin-top: 6px;
-  color: #f44336;
-  font-size: 0.8em;
-}
-
-.complexity-warning::before {
-  content: "\26A0 ";
-}

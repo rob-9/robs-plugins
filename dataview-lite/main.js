@@ -438,7 +438,11 @@ async function executeQuery(app, parsed) {
     const fileCache = app.metadataCache.getFileCache(file);
     let fileContent = null;
     if (needsContent) {
-      fileContent = await app.vault.cachedRead(file);
+      try {
+        fileContent = await app.vault.cachedRead(file);
+      } catch {
+        continue;
+      }
     }
     if (evaluateAllConditions(parsed.conditions, file, fileCache, fileContent)) {
       results.push({ file, fileCache, fileContent });
@@ -769,7 +773,7 @@ class DataviewLitePlugin extends obsidian.Plugin {
   refreshVisibleQueries() {
     // Debounce refreshes
     if (this._refreshTimeout) clearTimeout(this._refreshTimeout);
-    this._refreshTimeout = setTimeout(() => {
+    this._refreshTimeout = setTimeout(async () => {
       for (const [el, info] of this._queryBlocks) {
         // Check if element is still in the DOM
         if (!el.isConnected) {
@@ -778,7 +782,9 @@ class DataviewLitePlugin extends obsidian.Plugin {
         }
         // Re-render
         el.empty();
-        this.processQueryBlock(info.source, el, info.ctx);
+        try {
+          await this.processQueryBlock(info.source, el, info.ctx);
+        } catch {}
       }
     }, 500);
   }
