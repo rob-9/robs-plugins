@@ -3,6 +3,7 @@ const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const readline = require("readline");
+const os = require("os");
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -292,6 +293,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.activeRequest = null;
     this.discoveredSessions = [];
     this.sessionMessageCache = new Map();
+    this.pendingImages = [];
   }
 
   getViewType() {
@@ -337,6 +339,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.docText = doc;
     this.editor = editor;
     this.messages = [];
+    this.pendingImages = [];
     this.render();
   }
 
@@ -408,6 +411,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.messages = [];
     this.selectionText = "";
     this.docText = "";
+    this.pendingImages = [];
     this.refreshSessions();
   }
 
@@ -612,11 +616,47 @@ class InlineClaudeChatView extends obsidian.ItemView {
         });
       } else {
         bubble.innerText = msg.display || msg.content;
+        if (msg.images && msg.images.length > 0) {
+          const imgRow = bubble.createDiv({ cls: "ic-bubble-images" });
+          for (const url of msg.images) {
+            imgRow.createEl("img", { cls: "ic-bubble-img", attr: { src: url } });
+          }
+        }
       }
     }
 
+    // Drop overlay (covers entire panel)
+    const dropOverlay = container.createDiv({ cls: "ic-drop-overlay", text: "Drop image here" });
+
+    // Drag and drop on entire container so Obsidian doesn't intercept
+    container.addEventListener("dragover", (e) => {
+      if ([...(e.dataTransfer?.types || [])].includes("Files")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        container.addClass("ic-drag-over");
+      }
+    });
+    container.addEventListener("dragleave", (e) => {
+      if (!container.contains(e.relatedTarget)) {
+        container.removeClass("ic-drag-over");
+      }
+    });
+    container.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      container.removeClass("ic-drag-over");
+      this._handleDrop(e.dataTransfer.files);
+    });
+
     // Input area
     const inputArea = container.createDiv({ cls: "ic-chat-input-area" });
+
+    // Image preview strip
+    const previewStrip = inputArea.createDiv({ cls: "ic-image-previews" });
+    this._previewStripEl = previewStrip;
+    this._renderPreviews();
+
     const inputWrap = inputArea.createDiv({ cls: "ic-chat-input-wrap" });
     const textarea = inputWrap.createEl("textarea", {
       cls: "ic-chat-input",
@@ -630,6 +670,11 @@ class InlineClaudeChatView extends obsidian.ItemView {
     if (this.isLoading) {
       textarea.disabled = true;
       inputWrap.addClass("is-disabled");
+      const stopBtn = inputArea.createEl("button", { cls: "ic-stop-btn" });
+      const stopIcon = stopBtn.createEl("span");
+      obsidian.setIcon(stopIcon, "square");
+      stopBtn.createEl("span", { text: "Stop" });
+      stopBtn.addEventListener("click", () => this.cancelRequest());
     }
 
     // Auto-resize
@@ -642,6 +687,23 @@ class InlineClaudeChatView extends obsidian.ItemView {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         this.sendMessage(textarea.value.trim());
+      }
+      if (e.key === "Escape" && this.isLoading) {
+        e.preventDefault();
+        this.cancelRequest();
+      }
+    });
+
+    // Paste images from clipboard
+    textarea.addEventListener("paste", (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          this._handlePaste(item.getAsFile());
+          break;
+        }
       }
     });
 
@@ -669,21 +731,103 @@ class InlineClaudeChatView extends obsidian.ItemView {
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
+  _renderPreviews() {
+    const strip = this._previewStripEl;
+    if (!strip) return;
+    strip.empty();
+    if (this.pendingImages.length === 0) {
+      strip.style.display = "none";
+      return;
+    }
+    strip.style.display = "flex";
+    for (let i = 0; i < this.pendingImages.length; i++) {
+      const img = this.pendingImages[i];
+      const thumb = strip.createDiv({ cls: "ic-image-thumb" });
+      thumb.createEl("img", { attr: { src: img.previewUrl } });
+      const removeBtn = thumb.createEl("button", { cls: "ic-image-remove", text: "×" });
+      removeBtn.addEventListener("click", () => {
+        this.pendingImages.splice(i, 1);
+        this._renderPreviews();
+      });
+    }
+  }
+
+  async _handleDrop(fileList) {
+    const existingPaths = new Set(this.pendingImages.map(img => img.path));
+    for (const file of fileList) {
+      if (!file.type.startsWith("image/")) continue;
+      let filePath = file.path; // Electron provides this
+      if (!filePath) {
+        // Fallback: save to temp
+        const ext = file.name.split(".").pop() || "png";
+        filePath = path.join(os.tmpdir(), `ic-drop-${Date.now()}.${ext}`);
+        const buffer = Buffer.from(await file.arrayBuffer());
+        fs.writeFileSync(filePath, buffer);
+      }
+      if (existingPaths.has(filePath)) continue; // deduplicate
+      existingPaths.add(filePath);
+      this.pendingImages.push({
+        name: file.name,
+        path: filePath,
+        previewUrl: URL.createObjectURL(file),
+      });
+    }
+    this._renderPreviews();
+  }
+
+  async _handlePaste(blob) {
+    const ext = blob.type.split("/")[1] || "png";
+    const tmpPath = path.join(os.tmpdir(), `ic-paste-${Date.now()}.${ext}`);
+    const buffer = Buffer.from(await blob.arrayBuffer());
+    fs.writeFileSync(tmpPath, buffer);
+    this.pendingImages.push({
+      name: `pasted.${ext}`,
+      path: tmpPath,
+      previewUrl: URL.createObjectURL(blob),
+    });
+    this._renderPreviews();
+  }
+
+  cancelRequest() {
+    if (!this.activeRequest) return;
+    this.activeRequest.cancel();
+    this.activeRequest = null;
+    // Finalize the streaming message with whatever content we have so far
+    const streamMsg = this.messages.find(m => m.streaming);
+    if (streamMsg) {
+      streamMsg.streaming = false;
+      if (!streamMsg.content) streamMsg.content = "*Interrupted.*";
+    }
+    this.isLoading = false;
+    this.render();
+  }
+
   async sendMessage(text) {
-    if (!text || this.isLoading) return;
+    const hasImages = this.pendingImages.length > 0;
+    if ((!text && !hasImages) || this.isLoading) return;
 
     // First message includes selection context for display
     const isFirst = this.messages.length === 0;
+    let imagePrefix = "";
+    const messageImages = this.pendingImages.map(img => img.previewUrl);
+    if (hasImages) {
+      const paths = this.pendingImages.map(img => img.path).join("\n");
+      imagePrefix = "Read the following attached image file(s) using your Read tool, then respond:\n" + paths + "\n\n";
+      this.pendingImages = [];
+    }
+    const question = text || "Describe this image.";
+    const displayText = text || (hasImages ? "📎 Image" : "");
     const prompt = isFirst && this.docText
       ? "## Document Context\n" +
         this.docText +
         "\n\n## Selected Text\n" +
         this.selectionText +
-        "\n\n## Question\n" +
-        text
-      : text;
+        "\n\n" + imagePrefix +
+        "## Question\n" +
+        question
+      : imagePrefix + question;
 
-    this.messages.push({ role: "user", content: prompt, display: text, _new: true });
+    this.messages.push({ role: "user", content: prompt, display: displayText, images: messageImages, _new: true });
 
     // Add a streaming assistant message placeholder
     const streamMsg = { role: "assistant", content: "", streaming: true, _new: true };
