@@ -295,6 +295,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.sessionMessageCache = new Map();
     this.pendingImages = [];
     this.selectionCollapsed = false;
+    this._streamRenderVersion = 0;
   }
 
   getViewType() {
@@ -721,19 +722,31 @@ class InlineClaudeChatView extends obsidian.ItemView {
   renderStreamBubble(text, toolActivity) {
     const el = this.contentEl.querySelector(".ic-chat-stream-bubble");
     if (!el) return;
-    el.empty();
+    const scrollToBottom = () => {
+      const messagesEl = this.contentEl.querySelector(".ic-chat-messages");
+      if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+    };
     if (text) {
-      obsidian.MarkdownRenderer.render(this.app, text, el, "", this.plugin);
-    } else if (toolActivity) {
-      el.createEl("span", { cls: "ic-spinner" });
-      el.createEl("span", { text: " " + toolActivity });
+      const version = ++this._streamRenderVersion;
+      const tmp = document.createElement("div");
+      obsidian.MarkdownRenderer.render(this.app, text, tmp, "", this.plugin).then(() => {
+        if (this._streamRenderVersion !== version) return;
+        el.empty();
+        while (tmp.firstChild) el.appendChild(tmp.firstChild);
+        scrollToBottom();
+      });
     } else {
-      el.createEl("span", { cls: "ic-spinner" });
-      el.createEl("span", { text: " Thinking…" });
+      this._streamRenderVersion++;
+      el.empty();
+      if (toolActivity) {
+        el.createEl("span", { cls: "ic-spinner" });
+        el.createEl("span", { text: " " + toolActivity });
+      } else {
+        el.createEl("span", { cls: "ic-spinner" });
+        el.createEl("span", { text: " Thinking…" });
+      }
+      scrollToBottom();
     }
-    // Scroll to bottom
-    const messagesEl = this.contentEl.querySelector(".ic-chat-messages");
-    if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   _renderPreviews() {
