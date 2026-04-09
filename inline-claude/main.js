@@ -294,6 +294,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.discoveredSessions = [];
     this.sessionMessageCache = new Map();
     this.pendingImages = [];
+    this.selectionCollapsed = false;
   }
 
   getViewType() {
@@ -340,6 +341,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     this.editor = editor;
     this.messages = [];
     this.pendingImages = [];
+    this.selectionCollapsed = false;
     this.render();
   }
 
@@ -484,9 +486,14 @@ class InlineClaudeChatView extends obsidian.ItemView {
       });
 
       const body = selBlock.createDiv({ cls: "ic-chat-selection-body" });
+      if (this.selectionCollapsed) {
+        body.classList.add("is-collapsed");
+        toggle.innerText = "▶";
+      }
       obsidian.MarkdownRenderer.render(this.app, this.selectionText, body, "", this.plugin);
 
       header.addEventListener("click", () => {
+        this.selectionCollapsed = !this.selectionCollapsed;
         const collapsed = body.classList.toggle("is-collapsed");
         toggle.innerText = collapsed ? "▶" : "▼";
       });
