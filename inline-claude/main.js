@@ -12,7 +12,7 @@ const VIEW_TYPE = "inline-claude-chat";
 const DEFAULT_SETTINGS = {
   systemPrompt:
     "You are a helpful assistant embedded in an Obsidian note editor. The user will ask questions about selected text from their notes. Be concise. You have full access to their files via Claude Code.",
-  hue: "155, 114, 207",
+  hue: "",
 };
 
 // ─── Claude Code CLI ────────────────────────────────────────────────────────
@@ -677,10 +677,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
     if (this.isLoading) {
       textarea.disabled = true;
       inputWrap.addClass("is-disabled");
-      const stopBtn = inputArea.createEl("button", { cls: "ic-stop-btn" });
-      const stopIcon = stopBtn.createEl("span");
-      obsidian.setIcon(stopIcon, "square");
-      stopBtn.createEl("span", { text: "Stop" });
+      const stopBtn = inputWrap.createEl("button", { cls: "ic-stop-btn" });
+      obsidian.setIcon(stopBtn, "square");
       stopBtn.addEventListener("click", () => this.cancelRequest());
     }
 
@@ -894,10 +892,22 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
 // ─── Plugin ───────────────────────────────────────────────────────────────────
 
+function getAccentRGB() {
+  const el = document.createElement("span");
+  el.style.color = "var(--color-accent)";
+  el.style.display = "none";
+  document.body.appendChild(el);
+  const rgb = getComputedStyle(el).color;
+  el.remove();
+  const m = rgb.match(/(\d+),\s*(\d+),\s*(\d+)/);
+  return m ? `${m[1]}, ${m[2]}, ${m[3]}` : "138, 180, 248";
+}
+
 class InlineClaudePlugin extends obsidian.Plugin {
   applyHues() {
     const root = document.documentElement;
-    root.style.setProperty("--ic-hue", this.settings.hue);
+    const hue = this.settings.hue || getAccentRGB();
+    root.style.setProperty("--ic-hue", hue);
   }
 
   async onload() {
@@ -970,6 +980,15 @@ class InlineClaudePlugin extends obsidian.Plugin {
     this.registerDomEvent(document, "scroll", () => this.hideTooltip(), true);
 
     this.addSettingTab(new InlineClaudeSettingTab(this.app, this));
+
+    // Re-sync hue when Obsidian accent color changes
+    this._accentObserver = new MutationObserver(() => {
+      if (!this.settings.hue) this.applyHues();
+    });
+    this._accentObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["style", "class"],
+    });
   }
 
   showTooltip(x, y) {
@@ -997,6 +1016,7 @@ class InlineClaudePlugin extends obsidian.Plugin {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE);
     this.tooltipEl?.remove();
     this.tooltipEl = null;
+    this._accentObserver?.disconnect();
   }
 
   async openChat(selection, doc, editor) {
@@ -1080,10 +1100,10 @@ class InlineClaudeSettingTab extends obsidian.PluginSettingTab {
 
     new obsidian.Setting(containerEl)
       .setName("Hue")
-      .setDesc("RGB values for theme color (e.g. 155, 114, 207 for lilac)")
+      .setDesc("RGB values for theme color. Leave empty to use Obsidian's accent color.")
       .addText((t) =>
         t
-          .setPlaceholder("155, 114, 207")
+          .setPlaceholder("Obsidian accent")
           .setValue(this.plugin.settings.hue)
           .onChange(async (v) => {
             this.plugin.settings.hue = v.trim();

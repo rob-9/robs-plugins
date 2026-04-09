@@ -481,13 +481,26 @@
 }
 
 .ic-chat-input-wrap {
+  position: relative;
   padding: 1.5px;
   border-radius: 10px;
   background: linear-gradient(135deg, #b827fc 0%, #2c90fc 25%, #b8fd33 50%, #fec837 75%, #fd1892 100%);
   display: flex;
+  align-items: flex-end;
+}
+
+.ic-chat-input-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  border-radius: 8.5px;
+  background: var(--background-primary);
+  z-index: 0;
 }
 
 .ic-chat-input {
+  position: relative;
+  z-index: 1;
   flex: 1;
   display: block;
   box-sizing: border-box;
@@ -497,8 +510,8 @@
   padding: 8px 12px;
   margin: 0;
   border: none !important;
-  border-radius: 8px;
-  background: var(--background-primary) !important;
+  border-radius: 0;
+  background: transparent !important;
   color: var(--text-normal);
   font-family: var(--font-text);
   font-size: var(--font-text-size);
@@ -523,6 +536,10 @@
 
 .ic-chat-input-wrap.is-disabled {
   background: var(--background-modifier-border);
+}
+
+.ic-chat-input-wrap.is-disabled::before {
+  background: var(--background-primary);
 }
 
 /* ─── Image attachments ──────────────────────────────────────────────── */
@@ -623,34 +640,36 @@
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* ─── Stop button ────────────────────────────────────────────────────── */
+/* ─── Stop button (inside input wrap) ────────────────────────────────── */
 
 .ic-stop-btn {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin-top: 6px;
-  padding: 4px 14px;
-  border: 1px solid rgba(var(--ic-hue), 0.3);
-  border-radius: 8px;
-  background: rgba(var(--ic-hue), 0.08);
-  color: rgba(var(--ic-hue), 0.8);
-  font-family: var(--font-text);
-  font-size: var(--font-ui-smaller);
-  font-weight: 600;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: 0 4px 4px 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(var(--ic-hue), 0.85);
+  color: #fff;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
 
 .ic-stop-btn:hover {
-  background: rgba(var(--ic-hue), 0.18);
-  color: rgba(var(--ic-hue), 1);
+  background: rgba(128, 128, 128, 0.45);
+  transform: scale(1.08);
 }
 
 .ic-stop-btn svg {
   width: 12px;
   height: 12px;
+  fill: currentColor;
 }
 
 /* ─── Spinner ─────────────────────────────────────────────────────────── */
