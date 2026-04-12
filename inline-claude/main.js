@@ -532,13 +532,13 @@ class InlineClaudeChatView extends obsidian.ItemView {
         // Streaming bubble — updated in-place by renderStreamBubble
         bubble.addClass("ic-chat-stream-bubble");
         if (msg.content) {
-          obsidian.MarkdownRenderer.render(
-            this.app, msg.content, bubble, "", this.plugin
-          );
+          this.renderStreamBubble(msg.content);
         } else if (msg.toolActivity) {
+          this._streamRenderVersion++;
           bubble.createEl("span", { cls: "ic-spinner" });
           bubble.createEl("span", { text: " " + msg.toolActivity });
         } else {
+          this._streamRenderVersion++;
           bubble.createEl("span", { cls: "ic-spinner" });
           bubble.createEl("span", { text: " Thinking…" });
         }
