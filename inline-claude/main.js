@@ -333,6 +333,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
       this.activeRequest.cancel();
       this.activeRequest = null;
     }
+    this._renderComponent = null;
     this.contentEl.empty();
   }
 
@@ -422,6 +423,13 @@ class InlineClaudeChatView extends obsidian.ItemView {
     const container = this.contentEl;
     container.empty();
 
+    // Clean up previous render's child components (e.g. MathJax renderers)
+    if (this._renderComponent) {
+      this.removeChild(this._renderComponent);
+    }
+    this._renderComponent = new obsidian.Component();
+    this.addChild(this._renderComponent);
+
     // Header bar with session selector + new session button
     const headerBar = container.createDiv({ cls: "ic-chat-header" });
 
@@ -487,11 +495,17 @@ class InlineClaudeChatView extends obsidian.ItemView {
       });
 
       const body = selBlock.createDiv({ cls: "ic-chat-selection-body" });
-      if (this.selectionCollapsed) {
-        body.classList.add("is-collapsed");
+      const shouldCollapse = this.selectionCollapsed;
+      if (shouldCollapse) {
         toggle.innerText = "▶";
+        body.style.opacity = "0";
       }
-      obsidian.MarkdownRenderer.render(this.app, this.selectionText, body, "", this.plugin);
+      obsidian.MarkdownRenderer.render(this.app, this.selectionText, body, "", this._renderComponent).then(() => {
+        if (shouldCollapse && body.isConnected) {
+          body.classList.add("is-collapsed");
+          body.style.opacity = "";
+        }
+      });
 
       header.addEventListener("click", () => {
         this.selectionCollapsed = !this.selectionCollapsed;
@@ -551,7 +565,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
           msg.content,
           bubble,
           "",
-          this.plugin
+          this._renderComponent
         );
 
         // Skip action buttons for tool-use intermediary messages
@@ -729,7 +743,7 @@ class InlineClaudeChatView extends obsidian.ItemView {
     if (text) {
       const version = ++this._streamRenderVersion;
       const tmp = document.createElement("div");
-      obsidian.MarkdownRenderer.render(this.app, text, tmp, "", this.plugin).then(() => {
+      obsidian.MarkdownRenderer.render(this.app, text, tmp, "", this._renderComponent || this.plugin).then(() => {
         if (this._streamRenderVersion !== version) return;
         el.empty();
         while (tmp.firstChild) el.appendChild(tmp.firstChild);
