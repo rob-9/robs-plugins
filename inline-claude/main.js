@@ -311,6 +311,29 @@ class InlineClaudeChatView extends obsidian.ItemView {
   async onOpen() {
     this.contentEl.addClass("ic-chat-container");
     this.contentEl.addClass("ic-entering");
+
+    // Drag-and-drop on the container — registered once, not per render
+    const container = this.contentEl;
+    container.addEventListener("dragover", (e) => {
+      if ([...(e.dataTransfer?.types || [])].includes("Files")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        container.addClass("ic-drag-over");
+      }
+    });
+    container.addEventListener("dragleave", (e) => {
+      if (!container.contains(e.relatedTarget)) {
+        container.removeClass("ic-drag-over");
+      }
+    });
+    container.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      container.removeClass("ic-drag-over");
+      this._handleDrop(e.dataTransfer.files);
+    });
+
     this.refreshSessions();
   }
 
@@ -649,27 +672,6 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
     // Drop overlay (covers entire panel)
     const dropOverlay = container.createDiv({ cls: "ic-drop-overlay", text: "Drop image here" });
-
-    // Drag and drop on entire container so Obsidian doesn't intercept
-    container.addEventListener("dragover", (e) => {
-      if ([...(e.dataTransfer?.types || [])].includes("Files")) {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = "copy";
-        container.addClass("ic-drag-over");
-      }
-    });
-    container.addEventListener("dragleave", (e) => {
-      if (!container.contains(e.relatedTarget)) {
-        container.removeClass("ic-drag-over");
-      }
-    });
-    container.addEventListener("drop", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      container.removeClass("ic-drag-over");
-      this._handleDrop(e.dataTransfer.files);
-    });
 
     // Input area
     const inputArea = container.createDiv({ cls: "ic-chat-input-area" });
