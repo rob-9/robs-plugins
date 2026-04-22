@@ -468,28 +468,34 @@ class InlineClaudeChatView extends obsidian.ItemView {
 
     const dropdownList = dropdownWrap.createDiv({ cls: "ic-dropdown-list" });
 
-    // New session option
-    const newOpt = dropdownList.createDiv({ cls: "ic-dropdown-item ic-dropdown-new" });
-    const newIcon = newOpt.createEl("span", { cls: "ic-dropdown-item-icon" });
-    obsidian.setIcon(newIcon, "plus");
-    newOpt.createEl("span", { text: "New session" });
-    newOpt.addEventListener("click", () => {
-      dropdownList.classList.remove("is-open");
-      this.newSession();
-    });
+    const populateDropdown = () => {
+      dropdownList.empty();
 
-    // Session items
-    for (const s of this.discoveredSessions) {
-      const item = dropdownList.createDiv({ cls: "ic-dropdown-item" });
-      if (s.id === this.plugin.sessionId) item.addClass("is-active");
-      item.createEl("span", { cls: "ic-dropdown-item-text", text: s.label });
-      item.addEventListener("click", () => {
+      // New session option
+      const newOpt = dropdownList.createDiv({ cls: "ic-dropdown-item ic-dropdown-new" });
+      const newIcon = newOpt.createEl("span", { cls: "ic-dropdown-item-icon" });
+      obsidian.setIcon(newIcon, "plus");
+      newOpt.createEl("span", { text: "New session" });
+      newOpt.addEventListener("click", () => {
         dropdownList.classList.remove("is-open");
-        this.switchSession(s.id);
+        this.newSession();
       });
-    }
 
-    dropdownTrigger.addEventListener("click", (e) => {
+      // Session items
+      for (const s of this.discoveredSessions) {
+        const item = dropdownList.createDiv({ cls: "ic-dropdown-item" });
+        if (s.id === this.plugin.sessionId) item.addClass("is-active");
+        item.createEl("span", { cls: "ic-dropdown-item-text", text: s.label });
+        item.addEventListener("click", () => {
+          dropdownList.classList.remove("is-open");
+          this.switchSession(s.id);
+        });
+      }
+    };
+
+    populateDropdown();
+
+    dropdownTrigger.addEventListener("click", async (e) => {
       e.stopPropagation();
       const opening = !dropdownList.classList.contains("is-open");
       dropdownList.classList.toggle("is-open");
@@ -501,6 +507,13 @@ class InlineClaudeChatView extends obsidian.ItemView {
           }
         };
         document.addEventListener("click", close, true);
+
+        // Refresh session list from disk so newly-created sessions appear
+        const cwd = this.app.vault.adapter.basePath;
+        this.discoveredSessions = await discoverSessions(cwd);
+        if (dropdownList.classList.contains("is-open")) {
+          populateDropdown();
+        }
       }
     });
 
@@ -904,6 +917,8 @@ class InlineClaudeChatView extends obsidian.ItemView {
         this.plugin.sessionId = result.sessionId;
         if (isNew) {
           this.plugin.addSession(result.sessionId, text);
+          const cwd = this.app.vault.adapter.basePath;
+          this.discoveredSessions = await discoverSessions(cwd);
         } else {
           this.plugin.saveSettings();
         }
